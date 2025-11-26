@@ -1,0 +1,15 @@
+services:
+  psql_bp:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "${DB_PORT}:5432"
+    volumes:
+      - psql_volume_bp:/var/lib/postgresql
+
+volumes:
+  psql_volume_bp:

@@ -23,6 +23,7 @@ profile.cov
 # Go workspace file
 go.work
 go.work.sum
+tmp/
 
 # env file
 .env
@@ -30,3 +31,10 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Project build
+main
+*templ.go
+
+# OS X generated file
+.DS_Store
