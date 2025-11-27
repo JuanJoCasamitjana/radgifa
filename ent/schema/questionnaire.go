@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"entgo.io/ent"
+	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
 )
@@ -20,11 +21,15 @@ func (Questionnaire) Fields() []ent.Field {
 		field.String("title"),
 		field.String("description").Optional(),
 		field.Bool("is_published").Default(false),
-		field.Int("created_at").DefaultFunc(time.Now().UnixMilli()).Immutable(),
+		field.Int64("created_at").DefaultFunc(func() int64 { return time.Now().UnixMilli() }).Immutable(),
 	}
 }
 
 // Edges of the Questionnaire.
 func (Questionnaire) Edges() []ent.Edge {
-	return nil
+	return []ent.Edge{
+		edge.From("owner", User.Type).Ref("questionnaires").Unique().Required(),
+		edge.To("members", Member.Type),
+		edge.To("questions", Question.Type),
+	}
 }

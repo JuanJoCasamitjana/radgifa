@@ -20,7 +20,7 @@ func (User) Fields() []ent.Field {
 		field.UUID("id", uuid.New()),
 		field.String("name"),
 		field.String("display_name").Optional(),
-		field.Int("created_at").DefaultFunc(time.Now().UnixMilli()).Immutable(),
+		field.Int64("created_at").DefaultFunc(func() int64 { return time.Now().UnixMilli() }).Immutable(),
 		field.Bytes("password"),
 	}
 }
@@ -28,7 +28,7 @@ func (User) Fields() []ent.Field {
 // Edges of the User.
 func (User) Edges() []ent.Edge {
 	return []ent.Edge{
-		edge.To("questionnaire", Questionnaire.Type),
+		edge.To("questionnaires", Questionnaire.Type),
 		edge.To("memberships", Member.Type),
 	}
 }

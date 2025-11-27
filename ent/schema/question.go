@@ -1,7 +1,10 @@
 package schema
 
 import (
+	"time"
+
 	"entgo.io/ent"
+	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
 )
@@ -15,11 +18,16 @@ type Question struct {
 func (Question) Fields() []ent.Field {
 	return []ent.Field{
 		field.UUID("id", uuid.New()),
+		field.String("theme").MaxRuneLen(255),
+		field.Int64("created_at").DefaultFunc(func() int64 { return time.Now().UnixMilli() }).Immutable(),
 		field.String("text"),
 	}
 }
 
 // Edges of the Question.
 func (Question) Edges() []ent.Edge {
-	return nil
+	return []ent.Edge{
+		edge.From("questionnaire", Questionnaire.Type).Ref("questions").Unique().Required(),
+		edge.To("answers", Answer.Type),
+	}
 }
