@@ -9,6 +9,10 @@ import (
 	"strconv"
 	"time"
 
+	"radgifa/ent"
+
+	"entgo.io/ent/dialect"
+	enSQL "entgo.io/ent/dialect/sql"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/joho/godotenv/autoload"
 )
@@ -22,10 +26,14 @@ type Service interface {
 	// Close terminates the database connection.
 	// It returns an error if the connection cannot be closed.
 	Close() error
+
+	// Client returns the Ent client instance.
+	Client() *ent.Client
 }
 
 type service struct {
-	db *sql.DB
+	db     *sql.DB
+	client *ent.Client
 }
 
 var (
@@ -34,7 +42,7 @@ var (
 	username   = os.Getenv("DB_USERNAME")
 	port       = os.Getenv("DB_PORT")
 	host       = os.Getenv("DB_HOST")
-	schema     = os.Getenv("BLUEPRINT_DB_SCHEMA")
+	schema     = os.Getenv("DB_SCHEMA")
 	dbInstance *service
 )
 
@@ -48,8 +56,19 @@ func New() Service {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// Create Ent client without debug logs
+	drv := enSQL.OpenDB(dialect.Postgres, db)
+	client := ent.NewClient(ent.Driver(drv))
+
+	// Run migrations
+	if err := client.Schema.Create(context.Background()); err != nil {
+		log.Fatalf("failed creating schema resources: %v", err)
+	}
+
 	dbInstance = &service{
-		db: db,
+		db:     db,
+		client: client,
 	}
 	return dbInstance
 }
@@ -111,5 +130,13 @@ func (s *service) Health() map[string]string {
 // If an error occurs while closing the connection, it returns the error.
 func (s *service) Close() error {
 	log.Printf("Disconnected from database: %s", database)
+	if err := s.client.Close(); err != nil {
+		log.Printf("Error closing Ent client: %v", err)
+	}
 	return s.db.Close()
+}
+
+// Client returns the Ent client instance.
+func (s *service) Client() *ent.Client {
+	return s.client
 }
