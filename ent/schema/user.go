@@ -19,6 +19,7 @@ func (User) Fields() []ent.Field {
 	return []ent.Field{
 		field.UUID("id", uuid.New()),
 		field.String("name"),
+		field.String("username").Unique().Immutable(),
 		field.String("display_name").Optional(),
 		field.Int64("created_at").DefaultFunc(func() int64 { return time.Now().UnixMilli() }).Immutable(),
 		field.Bytes("password"),

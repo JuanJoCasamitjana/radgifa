@@ -10,11 +10,17 @@ import (
 	"time"
 
 	"radgifa/ent"
+	"radgifa/ent/user"
 
 	"entgo.io/ent/dialect"
 	enSQL "entgo.io/ent/dialect/sql"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/joho/godotenv/autoload"
+	"golang.org/x/crypto/bcrypt"
+)
+
+var (
+	bcryptCost = getCurrentBcryptCost()
 )
 
 // Service represents a service that interacts with a database.
@@ -29,6 +35,10 @@ type Service interface {
 
 	// Client returns the Ent client instance.
 	Client() *ent.Client
+
+	//User-related methods
+	CreateUser(name, displayName, username, password string, ctx context.Context) (*ent.User, error)
+	ValidateUserCredentials(username, password string, ctx context.Context) (*ent.User, error)
 }
 
 type service struct {
@@ -139,4 +149,40 @@ func (s *service) Close() error {
 // Client returns the Ent client instance.
 func (s *service) Client() *ent.Client {
 	return s.client
+}
+
+func getCurrentBcryptCost() int {
+	costStr := os.Getenv("BCRYPT_COST")
+	if costStr == "" {
+		return bcrypt.DefaultCost
+	}
+	cost, err := strconv.Atoi(costStr)
+	if err != nil {
+		return bcrypt.DefaultCost
+	}
+	return cost
+}
+
+func (s *service) CreateUser(name, displayName, username, password string, ctx context.Context) (*ent.User, error) {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
+	if err != nil {
+		return nil, err
+	}
+	user, err := s.client.User.Create().SetName(name).SetDisplayName(displayName).SetUsername(username).SetPassword(hashedPassword).Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
+func (s *service) ValidateUserCredentials(username, password string, ctx context.Context) (*ent.User, error) {
+	user, err := s.client.User.Query().Where(user.Username(username)).First(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = bcrypt.CompareHashAndPassword(user.Password, []byte(password))
+	if err != nil {
+		return nil, err
+	}
+	return user, nil
 }

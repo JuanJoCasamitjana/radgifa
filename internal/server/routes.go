@@ -6,6 +6,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
+	echojwt "github.com/labstack/echo-jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/natefinch/lumberjack"
@@ -13,11 +15,25 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
+var (
+	jwtSecret = []byte(os.Getenv("JWT_SECRET"))
+)
+
+type LoginCredentials struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type JWTClaims struct {
+	EntityId   string `json:"entity_id"`
+	EntityType string `json:"type"`
+	jwt.RegisteredClaims
+}
+
 func (s *Server) RegisterRoutes() http.Handler {
 	e := echo.New()
 	// Replace default logger with Zap + Lumberjack rotating file
 	logger := newZapLogger()
-
 	// Add request ID middleware first
 	e.Use(middleware.RequestID())
 
@@ -27,6 +43,12 @@ func (s *Server) RegisterRoutes() http.Handler {
 	// Keep recover middleware
 	e.Use(middleware.Recover())
 
+	e.POST("/register", s.RegisterHandler)
+	e.POST("/login", s.loginHandler)
+	// JWT Middleware
+	echojwt.JWT(jwtSecret)
+	//e.Use(jwtMiddleware)
+
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins:     []string{"https://*", "http://*"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
@@ -34,8 +56,6 @@ func (s *Server) RegisterRoutes() http.Handler {
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
-
-	e.GET("/", s.HelloWorldHandler)
 
 	e.GET("/health", s.healthHandler)
 
@@ -56,7 +76,36 @@ func (s *Server) HelloWorldHandler(c echo.Context) error {
 }
 
 func (s *Server) healthHandler(c echo.Context) error {
-	return c.JSON(http.StatusOK, s.db.Health())
+	return c.JSON(http.StatusOK, s.service.Health())
+}
+
+func (s *Server) loginHandler(c echo.Context) error {
+	// Implement login logic here
+	creds := new(LoginCredentials)
+	if err := c.Bind(creds); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request"})
+	}
+	ctx := c.Request().Context()
+	user, err := s.service.ValidateUserCredentials(creds.Username, creds.Password, ctx)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid credentials"})
+	}
+	claims := &JWTClaims{
+		EntityId:   user.ID.String(),
+		EntityType: "user",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	t, err := token.SignedString(jwtSecret)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "could not generate token"})
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{"token": t, "iat": claims.RegisteredClaims.IssuedAt.String(), "exp": claims.RegisteredClaims.ExpiresAt.String()})
 }
 
 // newZapLogger configures a Zap logger with dual output: console and rotating file.
