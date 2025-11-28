@@ -38,3 +38,7 @@ main
 
 # OS X generated file
 .DS_Store
+
+# Logs
+logs/
+*.log

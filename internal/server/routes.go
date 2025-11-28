@@ -17,6 +17,10 @@ func (s *Server) RegisterRoutes() http.Handler {
 	e := echo.New()
 	// Replace default logger with Zap + Lumberjack rotating file
 	logger := newZapLogger()
+
+	// Add request ID middleware first
+	e.Use(middleware.RequestID())
+
 	e.Use(zapRequestLogger(logger))
 	e.Use(zapInjectLogger(logger))
 
@@ -66,15 +70,14 @@ func newZapLogger() *zap.Logger {
 		Compress:   true,
 	})
 
-	// JSON encoder for file, console encoder for stdout
-	prodEncCfg := zap.NewProductionEncoderConfig()
-	prodEncCfg.TimeKey = "ts"
-	prodEncCfg.EncodeTime = zapcore.ISO8601TimeEncoder
-	fileCore := zapcore.NewCore(zapcore.NewJSONEncoder(prodEncCfg), fileSink, zapcore.InfoLevel)
+	// JSON encoder for both file and console
+	encCfg := zap.NewProductionEncoderConfig()
+	encCfg.TimeKey = "ts"
+	encCfg.EncodeTime = zapcore.ISO8601TimeEncoder
+	jsonEncoder := zapcore.NewJSONEncoder(encCfg)
 
-	devEncCfg := zap.NewDevelopmentEncoderConfig()
-	devEncCfg.EncodeTime = zapcore.ISO8601TimeEncoder
-	consoleCore := zapcore.NewCore(zapcore.NewConsoleEncoder(devEncCfg), zapcore.AddSync(os.Stdout), zapcore.InfoLevel)
+	fileCore := zapcore.NewCore(jsonEncoder, fileSink, zapcore.InfoLevel)
+	consoleCore := zapcore.NewCore(jsonEncoder, zapcore.AddSync(os.Stdout), zapcore.InfoLevel)
 
 	// Tee both cores
 	core := zapcore.NewTee(fileCore, consoleCore)
@@ -88,9 +91,11 @@ func zapRequestLogger(logger *zap.Logger) echo.MiddlewareFunc {
 			req := c.Request()
 			res := c.Response()
 			start := time.Now()
+			requestID := c.Response().Header().Get(echo.HeaderXRequestID)
 
 			// Before
 			logger.Info("request start",
+				zap.String("request_id", requestID),
 				zap.String("method", req.Method),
 				zap.String("path", c.Path()),
 				zap.String("remote_ip", c.RealIP()),
@@ -102,6 +107,7 @@ func zapRequestLogger(logger *zap.Logger) echo.MiddlewareFunc {
 			// After
 			latency := time.Since(start)
 			logger.Info("request end",
+				zap.String("request_id", requestID),
 				zap.Int("status", res.Status),
 				zap.Int64("bytes_out", res.Size),
 				zap.Duration("latency", latency),
@@ -123,11 +129,12 @@ func zapInjectLogger(base *zap.Logger) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			req := c.Request()
+			requestID := c.Response().Header().Get(echo.HeaderXRequestID)
 			// enrich with request-scoped fields
 			reqLogger := base.With(
+				zap.String("request_id", requestID),
 				zap.String("method", req.Method),
 				zap.String("path", c.Path()),
-				zap.String("remote_ip", c.RealIP()),
 			)
 			// inject into context
 			ctx := req.Context()
