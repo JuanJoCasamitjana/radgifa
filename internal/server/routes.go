@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -13,10 +14,16 @@ import (
 	"github.com/natefinch/lumberjack"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"golang.org/x/time/rate"
+)
+
+const (
+	defaultRequestsPerSecond rate.Limit = 10
 )
 
 var (
 	jwtSecret = []byte(os.Getenv("JWT_SECRET"))
+	reqs_sec  = setRequestsPerSecondLimit()
 )
 
 type LoginCredentials struct {
@@ -32,6 +39,10 @@ type JWTClaims struct {
 
 func (s *Server) RegisterRoutes() http.Handler {
 	e := echo.New()
+
+	// Configure custom validator
+	e.Validator = NewValidator()
+
 	// Replace default logger with Zap + Lumberjack rotating file
 	logger := newZapLogger()
 	// Add request ID middleware first
@@ -43,8 +54,11 @@ func (s *Server) RegisterRoutes() http.Handler {
 	// Keep recover middleware
 	e.Use(middleware.Recover())
 
-	e.POST("/register", s.RegisterHandler)
-	e.POST("/login", s.loginHandler)
+	// Rate limiter para auth endpoints: 5 requests por minuto por IP
+	authRateLimiter := middleware.RateLimiter(middleware.NewRateLimiterMemoryStore(reqs_sec))
+
+	e.POST("/register", s.RegisterHandler, authRateLimiter)
+	e.POST("/login", s.loginHandler, authRateLimiter)
 	// JWT Middleware
 	echojwt.JWT(jwtSecret)
 	//e.Use(jwtMiddleware)
@@ -73,6 +87,18 @@ func (s *Server) HelloWorldHandler(c echo.Context) error {
 
 	log.Info("responding hello world", zap.Int("status", http.StatusOK))
 	return c.JSON(http.StatusOK, resp)
+}
+
+func setRequestsPerSecondLimit() rate.Limit {
+	rateStr := os.Getenv("REQUESTS_PER_SECOND")
+	if rateStr == "" {
+		return defaultRequestsPerSecond
+	}
+	r, err := strconv.Atoi(rateStr)
+	if err != nil || r <= 0 {
+		return defaultRequestsPerSecond
+	}
+	return rate.Limit(r)
 }
 
 func (s *Server) healthHandler(c echo.Context) error {
