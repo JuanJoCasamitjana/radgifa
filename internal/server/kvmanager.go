@@ -29,6 +29,7 @@ type KVManager interface {
 	InsertWithTTL(key, value []byte, ttlSeconds int64) error
 	InsertPersistent(key, value []byte) error
 	Get(key []byte) ([]byte, error)
+	Delete(key []byte) error
 }
 
 func NewKVManager() KVManager {
@@ -121,4 +122,11 @@ func (kvm *kvmanager) Get(key []byte) ([]byte, error) {
 		return nil, err
 	}
 	return valCopy, nil
+}
+
+func (kvm *kvmanager) Delete(key []byte) error {
+	err := kvm.db.Update(func(txn *badger.Txn) error {
+		return txn.Delete(key)
+	})
+	return err
 }
