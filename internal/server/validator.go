@@ -9,6 +9,11 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+// Sanitizer interface for types that can sanitize their own data
+type Sanitizer interface {
+	Sanitize()
+}
+
 // CustomValidator wraps go-playground validator
 type CustomValidator struct {
 	validator *validator.Validate
@@ -90,4 +95,24 @@ func validateMaxBytes(fl validator.FieldLevel) bool {
 	}
 
 	return len([]byte(value)) <= limit
+}
+
+// BindAndValidate is a helper that binds JSON data to a struct, sanitizes it if possible, and validates it
+func BindAndValidate[T any](c echo.Context, data *T) error {
+	// Bind JSON data
+	if err := c.Bind(data); err != nil {
+		return echo.NewHTTPError(400, "invalid request")
+	}
+
+	// Sanitize if the type implements Sanitizer interface
+	if sanitizer, ok := any(data).(Sanitizer); ok {
+		sanitizer.Sanitize()
+	}
+
+	// Validate
+	if err := c.Validate(data); err != nil {
+		return echo.NewHTTPError(400, "validation failed")
+	}
+
+	return nil
 }

@@ -1,9 +1,14 @@
 package server
 
 import (
+	"net/http"
 	"strings"
+	"time"
 
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/labstack/echo/v4"
+	"github.com/microcosm-cc/bluemonday"
 )
 
 type NewUserRequest struct {
@@ -15,28 +20,52 @@ type NewUserRequest struct {
 
 // Sanitize limpia y normaliza los datos de entrada
 func (u *NewUserRequest) Sanitize() {
-	u.Name = strings.TrimSpace(u.Name)
-	u.DisplayName = strings.TrimSpace(u.DisplayName)
+	p := bluemonday.StrictPolicy()
+	u.Name = pgx.Identifier{strings.TrimSpace(p.Sanitize(u.Name))}.Sanitize()
+	u.DisplayName = pgx.Identifier{strings.TrimSpace(p.Sanitize(u.DisplayName))}.Sanitize()
 	u.Username = strings.ToLower(strings.TrimSpace(u.Username))
 	// No sanitizamos password para preservar espacios intencionales
 }
 
 func (s *Server) RegisterHandler(c echo.Context) error {
 	nuser := new(NewUserRequest)
-	if err := c.Bind(nuser); err != nil {
-		return c.JSON(400, map[string]string{"error": "invalid request"})
+	if err := BindAndValidate(c, nuser); err != nil {
+		return err
 	}
 
-	// Sanitizar datos de entrada
-	nuser.Sanitize()
-
-	if err := c.Validate(nuser); err != nil {
-		return c.JSON(400, map[string]string{"error": "validation failed"})
-	}
 	_, err := s.service.CreateUser(nuser.Name, nuser.DisplayName, nuser.Username, nuser.Password, c.Request().Context())
 	if err != nil {
 		return c.JSON(500, map[string]string{"error": "could not register user"})
 	}
 
 	return c.JSON(201, map[string]string{"message": "user registered successfully"})
+}
+
+func (s *Server) loginHandler(c echo.Context) error {
+	creds := new(LoginCredentials)
+	if err := BindAndValidate(c, creds); err != nil {
+		return err
+	}
+
+	ctx := c.Request().Context()
+	user, err := s.service.ValidateUserCredentials(creds.Username, creds.Password, ctx)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid credentials"})
+	}
+	claims := &JWTClaims{
+		EntityId:   user.ID.String(),
+		EntityType: "user",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	t, err := token.SignedString(jwtSecret)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "could not generate token"})
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{"token": t, "iat": claims.RegisteredClaims.IssuedAt.String(), "exp": claims.RegisteredClaims.ExpiresAt.String()})
 }

@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"strconv"
@@ -27,14 +28,34 @@ var (
 )
 
 type LoginCredentials struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Username string `json:"username" validate:"required,min=3,max=32"`
+	Password string `json:"password" validate:"required,min=8"`
 }
 
 type JWTClaims struct {
 	EntityId   string `json:"entity_id"`
 	EntityType string `json:"type"`
 	jwt.RegisteredClaims
+}
+
+func GetValuesFromToken(c echo.Context) (string, string, error) {
+	token, ok := c.Get("user").(*jwt.Token)
+	if !ok {
+		return "", "", fmt.Errorf("unauthorized, invalid token")
+	}
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", "", fmt.Errorf("unauthorized, invalid token")
+	}
+	entityIDStr, ok := claims["entity_id"].(string)
+	if !ok {
+		return "", "", fmt.Errorf("unauthorized, invalid token")
+	}
+	entityType, ok := claims["type"].(string)
+	if !ok {
+		return "", "", fmt.Errorf("unauthorized, invalid token")
+	}
+	return entityIDStr, entityType, nil
 }
 
 func (s *Server) RegisterRoutes() http.Handler {
@@ -59,9 +80,14 @@ func (s *Server) RegisterRoutes() http.Handler {
 
 	e.POST("/register", s.RegisterHandler, authRateLimiter)
 	e.POST("/login", s.loginHandler, authRateLimiter)
+
 	// JWT Middleware
-	echojwt.JWT(jwtSecret)
-	//e.Use(jwtMiddleware)
+	api := e.Group("/api")
+	jwtMiddleware := echojwt.JWT(jwtSecret)
+	api.Use(jwtMiddleware)
+
+	// Protected routes
+	api.POST("/questionnaires", s.createQuestionnaire)
 
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins:     []string{"https://*", "http://*"},
@@ -103,35 +129,6 @@ func setRequestsPerSecondLimit() rate.Limit {
 
 func (s *Server) healthHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, s.service.Health())
-}
-
-func (s *Server) loginHandler(c echo.Context) error {
-	// Implement login logic here
-	creds := new(LoginCredentials)
-	if err := c.Bind(creds); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request"})
-	}
-	ctx := c.Request().Context()
-	user, err := s.service.ValidateUserCredentials(creds.Username, creds.Password, ctx)
-	if err != nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid credentials"})
-	}
-	claims := &JWTClaims{
-		EntityId:   user.ID.String(),
-		EntityType: "user",
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-		},
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-
-	t, err := token.SignedString(jwtSecret)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "could not generate token"})
-	}
-
-	return c.JSON(http.StatusOK, map[string]string{"token": t, "iat": claims.RegisteredClaims.IssuedAt.String(), "exp": claims.RegisteredClaims.ExpiresAt.String()})
 }
 
 // newZapLogger configures a Zap logger with dual output: console and rotating file.

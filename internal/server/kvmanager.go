@@ -39,7 +39,12 @@ func NewKVManager() KVManager {
 	}
 	badgerkvstoragePath := fmt.Sprintf("%s/badger", kvstoragePath)
 
-	db, err := badger.Open(badger.DefaultOptions(badgerkvstoragePath).WithLogger(nil))
+	db, err := badger.Open(badger.
+		DefaultOptions(badgerkvstoragePath).
+		WithLogger(nil).
+		WithMemTableSize(64 << 20).
+		WithNumMemtables(3).
+		WithSyncWrites(false))
 	if err != nil {
 		log.Fatal(err)
 	}

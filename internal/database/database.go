@@ -14,6 +14,7 @@ import (
 
 	"entgo.io/ent/dialect"
 	enSQL "entgo.io/ent/dialect/sql"
+	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/joho/godotenv/autoload"
 	"golang.org/x/crypto/bcrypt"
@@ -39,6 +40,8 @@ type Service interface {
 	//User-related methods
 	CreateUser(name, displayName, username, password string, ctx context.Context) (*ent.User, error)
 	ValidateUserCredentials(username, password string, ctx context.Context) (*ent.User, error)
+	//Questionnaire-related methods
+	CreateQuestionnaire(userID uuid.UUID, title, description string, ctx context.Context) (*ent.Questionnaire, error)
 }
 
 type service struct {
@@ -185,4 +188,16 @@ func (s *service) ValidateUserCredentials(username, password string, ctx context
 		return nil, err
 	}
 	return user, nil
+}
+
+func (s *service) CreateQuestionnaire(userID uuid.UUID, title, description string, ctx context.Context) (*ent.Questionnaire, error) {
+	questionnaire, err := s.client.Questionnaire.Create().
+		SetTitle(title).
+		SetDescription(description).
+		SetOwnerID(userID).
+		Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return questionnaire, nil
 }
