@@ -62,6 +62,14 @@ func (_c *AnswerCreate) SetID(v uuid.UUID) *AnswerCreate {
 	return _c
 }
 
+// SetNillableID sets the "id" field if the given value is not nil.
+func (_c *AnswerCreate) SetNillableID(v *uuid.UUID) *AnswerCreate {
+	if v != nil {
+		_c.SetID(*v)
+	}
+	return _c
+}
+
 // SetQuestionID sets the "question" edge to the Question entity by ID.
 func (_c *AnswerCreate) SetQuestionID(id uuid.UUID) *AnswerCreate {
 	_c.mutation.SetQuestionID(id)
@@ -126,6 +134,10 @@ func (_c *AnswerCreate) defaults() {
 	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		v := answer.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
+	}
+	if _, ok := _c.mutation.ID(); !ok {
+		v := answer.DefaultID()
+		_c.mutation.SetID(v)
 	}
 }
 

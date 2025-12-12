@@ -77,6 +77,14 @@ func (_c *QuestionnaireCreate) SetID(v uuid.UUID) *QuestionnaireCreate {
 	return _c
 }
 
+// SetNillableID sets the "id" field if the given value is not nil.
+func (_c *QuestionnaireCreate) SetNillableID(v *uuid.UUID) *QuestionnaireCreate {
+	if v != nil {
+		_c.SetID(*v)
+	}
+	return _c
+}
+
 // SetOwnerID sets the "owner" edge to the User entity by ID.
 func (_c *QuestionnaireCreate) SetOwnerID(id uuid.UUID) *QuestionnaireCreate {
 	_c.mutation.SetOwnerID(id)
@@ -160,6 +168,10 @@ func (_c *QuestionnaireCreate) defaults() {
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := questionnaire.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
+	}
+	if _, ok := _c.mutation.ID(); !ok {
+		v := questionnaire.DefaultID()
+		_c.mutation.SetID(v)
 	}
 }
 
