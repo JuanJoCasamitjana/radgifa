@@ -1,6 +1,7 @@
 package server
 
 import (
+	"radgifa/ent"
 	"strings"
 
 	"github.com/google/uuid"
@@ -12,6 +13,16 @@ import (
 type NewQuestionnaireRequest struct {
 	Title       string `json:"title" validate:"required,min=1,max=200,no_whitespace_only"`
 	Description string `json:"description" validate:"omitempty,max=1000"`
+}
+
+type NewMemberRequest struct {
+	DisplayName string `json:"display_name" validate:"required,min=1,max=100"`
+}
+
+// Sanitize limpia y normaliza los datos de entrada
+func (m *NewMemberRequest) Sanitize() {
+	p := bluemonday.StrictPolicy()
+	m.DisplayName = pgx.Identifier{strings.TrimSpace(p.Sanitize(m.DisplayName))}.Sanitize()
 }
 
 // Sanitize limpia y normaliza los datos de entrada
@@ -42,4 +53,51 @@ func (s *Server) createQuestionnaire(c echo.Context) error {
 		return c.JSON(500, map[string]string{"error": "could not create questionnaire"})
 	}
 	return c.JSON(201, questionnaire.ID)
+}
+
+func (s *Server) createQuestionnaireMember(c echo.Context) error {
+	// Verificar si hay token JWT opcional (sin requerir middleware)
+	var userID uuid.UUID
+	if authHeader := c.Request().Header.Get("Authorization"); authHeader != "" {
+		if strings.HasPrefix(authHeader, "Bearer ") {
+			tokenString := authHeader[7:]
+			if claims, err := validateJWTToken(tokenString); err == nil {
+				if claims["type"] == "user" {
+					if entityIDStr, ok := claims["entity_id"].(string); ok {
+						userID, _ = uuid.Parse(entityIDStr)
+					}
+				}
+			}
+		}
+	}
+
+	// Validar y obtener datos del request
+	memberReq := new(NewMemberRequest)
+	if err := BindAndValidate(c, memberReq); err != nil {
+		return err
+	}
+
+	token := c.Param("token")
+	val, err := s.kvmanager.Get([]byte(token))
+	if err != nil || val == nil {
+		return c.JSON(400, map[string]string{"error": "invalid or expired token"})
+	}
+	questionnaireID, err := uuid.Parse(string(val))
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid or expired token"})
+	}
+
+	var member *ent.Member
+	if userID != uuid.Nil {
+		member, err = s.service.CreateMember(userID, questionnaireID, memberReq.DisplayName, c.Request().Context())
+		if err != nil {
+			return c.JSON(500, map[string]string{"error": "could not create member"})
+		}
+	} else {
+		member, err = s.service.CreateAnonymousMember(questionnaireID, memberReq.DisplayName, c.Request().Context())
+		if err != nil {
+			return c.JSON(500, map[string]string{"error": "could not create anonymous member"})
+		}
+	}
+	return c.JSON(201, member.ID)
 }

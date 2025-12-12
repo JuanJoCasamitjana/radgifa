@@ -42,6 +42,10 @@ type Service interface {
 	ValidateUserCredentials(username, password string, ctx context.Context) (*ent.User, error)
 	//Questionnaire-related methods
 	CreateQuestionnaire(userID uuid.UUID, title, description string, ctx context.Context) (*ent.Questionnaire, error)
+
+	//Member-related methods
+	CreateMember(userID, questionnaireID uuid.UUID, displayName string, ctx context.Context) (*ent.Member, error)
+	CreateAnonymousMember(questionnaireID uuid.UUID, displayName string, ctx context.Context) (*ent.Member, error)
 }
 
 type service struct {
@@ -200,4 +204,27 @@ func (s *service) CreateQuestionnaire(userID uuid.UUID, title, description strin
 		return nil, err
 	}
 	return questionnaire, nil
+}
+
+func (s *service) CreateMember(userID, questionnaireID uuid.UUID, displayName string, ctx context.Context) (*ent.Member, error) {
+	member, err := s.client.Member.Create().
+		SetQuestionnaireID(questionnaireID).
+		SetUserID(userID).
+		SetDisplayName(displayName).
+		Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return member, nil
+}
+
+func (s *service) CreateAnonymousMember(questionnaireID uuid.UUID, displayName string, ctx context.Context) (*ent.Member, error) {
+	member, err := s.client.Member.Create().
+		SetQuestionnaireID(questionnaireID).
+		SetDisplayName(displayName).
+		Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return member, nil
 }

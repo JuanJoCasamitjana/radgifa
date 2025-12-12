@@ -58,6 +58,27 @@ func GetValuesFromToken(c echo.Context) (string, string, error) {
 	return entityIDStr, entityType, nil
 }
 
+// validateJWTToken valida un token JWT sin middleware (para rutas públicas con auth opcional)
+func validateJWTToken(tokenString string) (jwt.MapClaims, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		// Validar que sea exactamente HS256 como se usa en loginHandler
+		if token.Method != jwt.SigningMethodHS256 {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return jwtSecret, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		return claims, nil
+	}
+
+	return nil, fmt.Errorf("invalid token")
+}
+
 func (s *Server) RegisterRoutes() http.Handler {
 	e := echo.New()
 
@@ -80,6 +101,9 @@ func (s *Server) RegisterRoutes() http.Handler {
 
 	e.POST("/register", s.RegisterHandler, authRateLimiter)
 	e.POST("/login", s.loginHandler, authRateLimiter)
+
+	// Public routes (no auth required)
+	e.POST("/join/:token", s.createQuestionnaireMember)
 
 	// JWT Middleware
 	api := e.Group("/api")
