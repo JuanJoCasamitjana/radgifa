@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/labstack/echo/v4"
 	"github.com/microcosm-cc/bluemonday"
+	"go.uber.org/zap"
 )
 
 type NewQuestionnaireRequest struct {
@@ -52,6 +53,11 @@ func (s *Server) createQuestionnaire(c echo.Context) error {
 
 	questionnaire, err := s.service.CreateQuestionnaire(userID, nq.Title, nq.Description, ctx)
 	if err != nil {
+		log := GetLogger(c)
+		log.Error("failed to create questionnaire",
+			zap.String("user_id", userID.String()),
+			zap.String("title", nq.Title),
+			zap.Error(err))
 		return c.JSON(500, map[string]string{"error": "could not create questionnaire"})
 	}
 	return c.JSON(201, questionnaire.ID)
@@ -93,11 +99,22 @@ func (s *Server) createQuestionnaireMember(c echo.Context) error {
 	if userID != uuid.Nil {
 		member, err = s.service.CreateMember(userID, questionnaireID, memberReq.DisplayName, c.Request().Context())
 		if err != nil {
+			log := GetLogger(c)
+			log.Error("failed to create authenticated member",
+				zap.String("user_id", userID.String()),
+				zap.String("questionnaire_id", questionnaireID.String()),
+				zap.String("display_name", memberReq.DisplayName),
+				zap.Error(err))
 			return c.JSON(500, map[string]string{"error": "could not create member"})
 		}
 	} else {
 		member, err = s.service.CreateAnonymousMember(questionnaireID, memberReq.DisplayName, c.Request().Context())
 		if err != nil {
+			log := GetLogger(c)
+			log.Error("failed to create anonymous member",
+				zap.String("questionnaire_id", questionnaireID.String()),
+				zap.String("display_name", memberReq.DisplayName),
+				zap.Error(err))
 			return c.JSON(500, map[string]string{"error": "could not create anonymous member"})
 		}
 	}
@@ -135,6 +152,11 @@ func (s *Server) generateQuestionnaireInvitation(c echo.Context) error {
 	ctx := c.Request().Context()
 	questionnaire, err := s.service.GetQuestionnaire(qID, ctx)
 	if err != nil {
+		log := GetLogger(c)
+		log.Error("failed to get questionnaire for invitation",
+			zap.String("questionnaire_id", qID.String()),
+			zap.String("user_id", userID.String()),
+			zap.Error(err))
 		return c.JSON(404, map[string]string{"error": "questionnaire not found"})
 	}
 

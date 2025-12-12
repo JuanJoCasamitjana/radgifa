@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 	"unicode"
@@ -22,7 +23,20 @@ type CustomValidator struct {
 // Validate validates structs
 func (cv *CustomValidator) Validate(i interface{}) error {
 	if err := cv.validator.Struct(i); err != nil {
-		return echo.NewHTTPError(400, err.Error())
+		// Extraer errores de validación específicos
+		if validationErrors, ok := err.(validator.ValidationErrors); ok {
+			errors := make(map[string]string)
+			for _, fieldError := range validationErrors {
+				fieldName := fieldError.Field()
+				errorMessage := getFieldErrorMessage(fieldError)
+				errors[fieldName] = errorMessage
+			}
+			return echo.NewHTTPError(400, map[string]interface{}{
+				"error":   "validation failed",
+				"details": errors,
+			})
+		}
+		return echo.NewHTTPError(400, "validation failed")
 	}
 	return nil
 }
@@ -97,11 +111,37 @@ func validateMaxBytes(fl validator.FieldLevel) bool {
 	return len([]byte(value)) <= limit
 }
 
+// getFieldErrorMessage genera un mensaje de error personalizado basado en el tipo de validación
+func getFieldErrorMessage(fe validator.FieldError) string {
+	fieldName := fe.Field()
+	tag := fe.Tag()
+	param := fe.Param()
+
+	switch tag {
+	case "required":
+		return fmt.Sprintf("%s is required", fieldName)
+	case "min":
+		return fmt.Sprintf("%s must be at least %s characters", fieldName, param)
+	case "max":
+		return fmt.Sprintf("%s must be at most %s characters", fieldName, param)
+	case "username_format":
+		return fmt.Sprintf("%s can only contain letters, numbers, hyphens and underscores", fieldName)
+	case "password_strength":
+		return fmt.Sprintf("%s must contain at least one uppercase letter, one lowercase letter, and one number", fieldName)
+	case "no_whitespace_only":
+		return fmt.Sprintf("%s cannot be empty or contain only whitespace", fieldName)
+	case "max_bytes":
+		return fmt.Sprintf("%s exceeds maximum allowed size", fieldName)
+	default:
+		return fmt.Sprintf("%s is invalid", fieldName)
+	}
+}
+
 // BindAndValidate is a helper that binds JSON data to a struct, sanitizes it if possible, and validates it
 func BindAndValidate[T any](c echo.Context, data *T) error {
 	// Bind JSON data
 	if err := c.Bind(data); err != nil {
-		return echo.NewHTTPError(400, "invalid request")
+		return echo.NewHTTPError(400, map[string]string{"error": "invalid request"})
 	}
 
 	// Sanitize if the type implements Sanitizer interface
@@ -111,7 +151,7 @@ func BindAndValidate[T any](c echo.Context, data *T) error {
 
 	// Validate
 	if err := c.Validate(data); err != nil {
-		return echo.NewHTTPError(400, "validation failed")
+		return err // El error ya viene formateado del CustomValidator
 	}
 
 	return nil

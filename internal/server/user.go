@@ -9,11 +9,12 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/labstack/echo/v4"
 	"github.com/microcosm-cc/bluemonday"
+	"go.uber.org/zap"
 )
 
 type NewUserRequest struct {
 	Name        string `json:"name" validate:"required,min=1,max=200,no_whitespace_only"`
-	DisplayName string `json:"display_name" validate:"omitempty,min=1,max=100"`
+	DisplayName string `json:"display_name" validate:"max=100"`
 	Username    string `json:"username" validate:"required,min=3,max=32,username_format"`
 	Password    string `json:"password" validate:"required,min=8,max_bytes=72,password_strength"`
 }
@@ -35,6 +36,11 @@ func (s *Server) RegisterHandler(c echo.Context) error {
 
 	_, err := s.service.CreateUser(nuser.Name, nuser.DisplayName, nuser.Username, nuser.Password, c.Request().Context())
 	if err != nil {
+		log := GetLogger(c)
+		log.Error("failed to create user",
+			zap.String("username", nuser.Username),
+			zap.String("name", nuser.Name),
+			zap.Error(err))
 		return c.JSON(500, map[string]string{"error": "could not register user"})
 	}
 
@@ -50,6 +56,10 @@ func (s *Server) loginHandler(c echo.Context) error {
 	ctx := c.Request().Context()
 	user, err := s.service.ValidateUserCredentials(creds.Username, creds.Password, ctx)
 	if err != nil {
+		log := GetLogger(c)
+		log.Warn("login attempt failed",
+			zap.String("username", creds.Username),
+			zap.Error(err))
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid credentials"})
 	}
 	claims := &JWTClaims{
