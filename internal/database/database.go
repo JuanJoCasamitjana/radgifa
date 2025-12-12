@@ -42,6 +42,7 @@ type Service interface {
 	ValidateUserCredentials(username, password string, ctx context.Context) (*ent.User, error)
 	//Questionnaire-related methods
 	CreateQuestionnaire(userID uuid.UUID, title, description string, ctx context.Context) (*ent.Questionnaire, error)
+	GetQuestionnaire(questionnaireID uuid.UUID, ctx context.Context) (*ent.Questionnaire, error)
 
 	//Member-related methods
 	CreateMember(userID, questionnaireID uuid.UUID, displayName string, ctx context.Context) (*ent.Member, error)
@@ -200,6 +201,20 @@ func (s *service) CreateQuestionnaire(userID uuid.UUID, title, description strin
 		SetDescription(description).
 		SetOwnerID(userID).
 		Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return questionnaire, nil
+}
+
+func (s *service) GetQuestionnaire(questionnaireID uuid.UUID, ctx context.Context) (*ent.Questionnaire, error) {
+	questionnaire, err := s.client.Questionnaire.
+		Query().
+		Where(func(q *enSQL.Selector) {
+			q.Where(enSQL.EQ("id", questionnaireID))
+		}).
+		WithOwner().
+		Only(ctx)
 	if err != nil {
 		return nil, err
 	}

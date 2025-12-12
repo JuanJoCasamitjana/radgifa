@@ -103,7 +103,7 @@ func (s *Server) RegisterRoutes() http.Handler {
 	e.POST("/login", s.loginHandler, authRateLimiter)
 
 	// Public routes (no auth required)
-	e.POST("/join/:token", s.createQuestionnaireMember)
+	e.POST("/join/:token", s.createQuestionnaireMember).Name = "join-questionnaire"
 
 	// JWT Middleware
 	api := e.Group("/api")
@@ -112,6 +112,7 @@ func (s *Server) RegisterRoutes() http.Handler {
 
 	// Protected routes
 	api.POST("/questionnaires", s.createQuestionnaire)
+	api.POST("/questionnaires/:id/invite", s.generateQuestionnaireInvitation)
 
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins:     []string{"https://*", "http://*"},

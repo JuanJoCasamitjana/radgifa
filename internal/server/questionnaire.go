@@ -1,6 +1,8 @@
 package server
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"radgifa/ent"
 	"strings"
 
@@ -100,4 +102,60 @@ func (s *Server) createQuestionnaireMember(c echo.Context) error {
 		}
 	}
 	return c.JSON(201, member.ID)
+}
+
+func generateInvitationToken() (string, error) {
+	bytes := make([]byte, 16) // 128 bits
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(bytes), nil
+}
+
+func (s *Server) generateQuestionnaireInvitation(c echo.Context) error {
+	entityIDStr, entityType, err := GetValuesFromToken(c)
+	if err != nil || entityType != "user" {
+		return c.JSON(401, map[string]string{"error": "unauthorized, invalid token"})
+	}
+
+	userID, err := uuid.Parse(entityIDStr)
+	if err != nil {
+		return c.JSON(401, map[string]string{"error": "unauthorized, invalid token"})
+	}
+
+	questionnaireID := c.Param("id")
+
+	// Validar que es un UUID válido
+	qID, err := uuid.Parse(questionnaireID)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid questionnaire ID"})
+	}
+
+	// Verificar que el usuario es dueño del cuestionario
+	ctx := c.Request().Context()
+	questionnaire, err := s.service.GetQuestionnaire(qID, ctx)
+	if err != nil {
+		return c.JSON(404, map[string]string{"error": "questionnaire not found"})
+	}
+
+	if questionnaire.Edges.Owner == nil || questionnaire.Edges.Owner.ID != userID {
+		return c.JSON(403, map[string]string{"error": "not authorized to invite to this questionnaire"})
+	}
+
+	token, err := generateInvitationToken()
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "could not generate invitation token"})
+	}
+
+	if err := s.kvmanager.InsertWithTTL([]byte(token), []byte(questionnaireID), 86400); err != nil {
+		return c.JSON(500, map[string]string{"error": "could not save invitation token"})
+	}
+
+	joinURL := c.Echo().Reverse("join-questionnaire", token)
+
+	return c.JSON(201, map[string]interface{}{
+		"token":      token,
+		"expires_in": "24 hours",
+		"join_url":   joinURL,
+	})
 }
