@@ -6,6 +6,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
+	"entgo.io/ent/schema/index"
 	"github.com/google/uuid"
 )
 
@@ -31,5 +32,13 @@ func (Member) Edges() []ent.Edge {
 		edge.From("user", User.Type).Ref("memberships").Unique(),
 		edge.From("questionnaire", Questionnaire.Type).Ref("members").Unique().Required(),
 		edge.To("answers", Answer.Type),
+	}
+}
+
+func (Member) Indexes() []ent.Index {
+	return []ent.Index{
+		index.Fields("unique_identifier").
+			Edges("questionnaire").
+			Unique(),
 	}
 }

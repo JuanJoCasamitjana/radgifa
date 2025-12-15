@@ -66,6 +66,13 @@ var (
 				OnDelete:   schema.SetNull,
 			},
 		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "member_unique_identifier_questionnaire_members",
+				Unique:  true,
+				Columns: []*schema.Column{MembersColumns[3], MembersColumns[5]},
+			},
+		},
 	}
 	// QuestionsColumns holds the columns for the "questions" table.
 	QuestionsColumns = []*schema.Column{
@@ -116,7 +123,7 @@ var (
 	UsersColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
 		{Name: "name", Type: field.TypeString},
-		{Name: "username", Type: field.TypeString},
+		{Name: "username", Type: field.TypeString, Unique: true},
 		{Name: "display_name", Type: field.TypeString, Nullable: true},
 		{Name: "created_at", Type: field.TypeInt64},
 		{Name: "password", Type: field.TypeBytes},

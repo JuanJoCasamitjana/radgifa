@@ -2,7 +2,9 @@ package database
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
@@ -24,29 +26,22 @@ var (
 	bcryptCost = getCurrentBcryptCost()
 )
 
-// Service represents a service that interacts with a database.
 type Service interface {
-	// Health returns a map of health status information.
-	// The keys and values in the map are service-specific.
 	Health() map[string]string
-
-	// Close terminates the database connection.
-	// It returns an error if the connection cannot be closed.
 	Close() error
-
-	// Client returns the Ent client instance.
 	Client() *ent.Client
 
-	//User-related methods
 	CreateUser(name, displayName, username, password string, ctx context.Context) (*ent.User, error)
 	ValidateUserCredentials(username, password string, ctx context.Context) (*ent.User, error)
-	//Questionnaire-related methods
+	IsUsernameAvailable(username string, ctx context.Context) (bool, error)
 	CreateQuestionnaire(userID uuid.UUID, title, description string, ctx context.Context) (*ent.Questionnaire, error)
 	GetQuestionnaire(questionnaireID uuid.UUID, ctx context.Context) (*ent.Questionnaire, error)
 
-	//Member-related methods
-	CreateMember(userID, questionnaireID uuid.UUID, displayName string, ctx context.Context) (*ent.Member, error)
-	CreateAnonymousMember(questionnaireID uuid.UUID, displayName string, ctx context.Context) (*ent.Member, error)
+	CreateMember(userID, questionnaireID uuid.UUID, uniqueIdentifier, displayName string, ctx context.Context) (*ent.Member, error)
+	CreateAnonymousMember(questionnaireID uuid.UUID, uniqueIdentifier, displayName string, ctx context.Context) (*ent.Member, string, error)
+	ValidateMemberCredentials(uniqueIdentifier, passcode string, ctx context.Context) (*ent.Member, error)
+	GetMemberWithQuestionnaire(memberID uuid.UUID, ctx context.Context) (*ent.Member, error)
+	IsMemberIdentifierAvailable(questionnaireID uuid.UUID, uniqueIdentifier string, ctx context.Context) (bool, error)
 }
 
 type service struct {
@@ -65,7 +60,6 @@ var (
 )
 
 func New() Service {
-	// Reuse Connection
 	if dbInstance != nil {
 		return dbInstance
 	}
@@ -75,11 +69,9 @@ func New() Service {
 		log.Fatal(err)
 	}
 
-	// Create Ent client without debug logs
 	drv := enSQL.OpenDB(dialect.Postgres, db)
 	client := ent.NewClient(ent.Driver(drv))
 
-	// Run migrations
 	if err := client.Schema.Create(context.Background()); err != nil {
 		log.Fatalf("failed creating schema resources: %v", err)
 	}
@@ -91,28 +83,23 @@ func New() Service {
 	return dbInstance
 }
 
-// Health checks the health of the database connection by pinging the database.
-// It returns a map with keys indicating various health statistics.
 func (s *service) Health() map[string]string {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
 	stats := make(map[string]string)
 
-	// Ping the database
 	err := s.db.PingContext(ctx)
 	if err != nil {
 		stats["status"] = "down"
 		stats["error"] = fmt.Sprintf("db down: %v", err)
-		log.Fatalf("db down: %v", err) // Log the error and terminate the program
+		log.Fatalf("db down: %v", err)
 		return stats
 	}
 
-	// Database is up, add more statistics
 	stats["status"] = "up"
 	stats["message"] = "It's healthy"
 
-	// Get database stats (like open connections, in use, idle, etc.)
 	dbStats := s.db.Stats()
 	stats["open_connections"] = strconv.Itoa(dbStats.OpenConnections)
 	stats["in_use"] = strconv.Itoa(dbStats.InUse)
@@ -122,8 +109,7 @@ func (s *service) Health() map[string]string {
 	stats["max_idle_closed"] = strconv.FormatInt(dbStats.MaxIdleClosed, 10)
 	stats["max_lifetime_closed"] = strconv.FormatInt(dbStats.MaxLifetimeClosed, 10)
 
-	// Evaluate stats to provide a health message
-	if dbStats.OpenConnections > 40 { // Assuming 50 is the max for this example
+	if dbStats.OpenConnections > 40 {
 		stats["message"] = "The database is experiencing heavy load."
 	}
 
@@ -171,6 +157,16 @@ func getCurrentBcryptCost() int {
 	return cost
 }
 
+// generateSecurePasscode genera un passcode de 8 caracteres alfanuméricos
+func generateSecurePasscode() (string, error) {
+	bytes := make([]byte, 6) // 6 bytes = 48 bits
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	// Usar hex encoding y tomar los primeros 8 caracteres
+	return hex.EncodeToString(bytes)[:8], nil
+}
+
 func (s *service) CreateUser(name, displayName, username, password string, ctx context.Context) (*ent.User, error) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
 	if err != nil {
@@ -193,6 +189,18 @@ func (s *service) ValidateUserCredentials(username, password string, ctx context
 		return nil, err
 	}
 	return user, nil
+}
+
+func (s *service) IsUsernameAvailable(username string, ctx context.Context) (bool, error) {
+	count, err := s.client.User.Query().
+		Where(func(u *enSQL.Selector) {
+			u.Where(enSQL.EQ("username", username))
+		}).
+		Count(ctx)
+	if err != nil {
+		return false, err
+	}
+	return count == 0, nil
 }
 
 func (s *service) CreateQuestionnaire(userID uuid.UUID, title, description string, ctx context.Context) (*ent.Questionnaire, error) {
@@ -221,10 +229,11 @@ func (s *service) GetQuestionnaire(questionnaireID uuid.UUID, ctx context.Contex
 	return questionnaire, nil
 }
 
-func (s *service) CreateMember(userID, questionnaireID uuid.UUID, displayName string, ctx context.Context) (*ent.Member, error) {
+func (s *service) CreateMember(userID, questionnaireID uuid.UUID, uniqueIdentifier, displayName string, ctx context.Context) (*ent.Member, error) {
 	member, err := s.client.Member.Create().
 		SetQuestionnaireID(questionnaireID).
 		SetUserID(userID).
+		SetUniqueIdentifier(uniqueIdentifier).
 		SetDisplayName(displayName).
 		Save(ctx)
 	if err != nil {
@@ -233,13 +242,69 @@ func (s *service) CreateMember(userID, questionnaireID uuid.UUID, displayName st
 	return member, nil
 }
 
-func (s *service) CreateAnonymousMember(questionnaireID uuid.UUID, displayName string, ctx context.Context) (*ent.Member, error) {
+func (s *service) CreateAnonymousMember(questionnaireID uuid.UUID, uniqueIdentifier, displayName string, ctx context.Context) (*ent.Member, string, error) {
+	// Generar passcode aleatorio
+	passcode, err := generateSecurePasscode()
+	if err != nil {
+		return nil, "", err
+	}
+
+	// Hash del passcode para almacenar
+	hashedPasscode, err := bcrypt.GenerateFromPassword([]byte(passcode), bcryptCost)
+	if err != nil {
+		return nil, "", err
+	}
+
 	member, err := s.client.Member.Create().
 		SetQuestionnaireID(questionnaireID).
 		SetDisplayName(displayName).
+		SetUniqueIdentifier(uniqueIdentifier).
+		SetPassCode(hashedPasscode).
 		Save(ctx)
+	if err != nil {
+		return nil, "", err
+	}
+	return member, passcode, nil
+}
+
+func (s *service) ValidateMemberCredentials(uniqueIdentifier, passcode string, ctx context.Context) (*ent.Member, error) {
+	member, err := s.client.Member.Query().
+		Where(func(m *enSQL.Selector) {
+			m.Where(enSQL.EQ("unique_identifier", uniqueIdentifier))
+		}).
+		Only(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Verificar passcode
+	err = bcrypt.CompareHashAndPassword(member.PassCode, []byte(passcode))
 	if err != nil {
 		return nil, err
 	}
 	return member, nil
+}
+
+func (s *service) GetMemberWithQuestionnaire(memberID uuid.UUID, ctx context.Context) (*ent.Member, error) {
+	return s.client.Member.Query().
+		Where(func(m *enSQL.Selector) {
+			m.Where(enSQL.EQ("id", memberID))
+		}).
+		WithQuestionnaire().
+		Only(ctx)
+}
+
+func (s *service) IsMemberIdentifierAvailable(questionnaireID uuid.UUID, uniqueIdentifier string, ctx context.Context) (bool, error) {
+	count, err := s.client.Member.Query().
+		Where(func(m *enSQL.Selector) {
+			m.Where(enSQL.And(
+				enSQL.EQ("questionnaire_id", questionnaireID),
+				enSQL.EQ("unique_identifier", uniqueIdentifier),
+			))
+		}).
+		Count(ctx)
+	if err != nil {
+		return false, err
+	}
+	return count == 0, nil
 }

@@ -102,6 +102,10 @@ func (s *Server) RegisterRoutes() http.Handler {
 	e.POST("/register", s.RegisterHandler, authRateLimiter)
 	e.POST("/login", s.loginHandler, authRateLimiter)
 
+	// Public routes for availability checking
+	e.POST("/check/username", s.checkUsernameAvailability)
+	e.POST("/check/member/:token", s.checkMemberIdentifierAvailability)
+
 	// Public routes (no auth required)
 	e.POST("/join/:token", s.createQuestionnaireMember).Name = "join-questionnaire"
 

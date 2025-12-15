@@ -14,12 +14,15 @@ import (
 
 type NewUserRequest struct {
 	Name        string `json:"name" validate:"required,min=1,max=200,no_whitespace_only"`
-	DisplayName string `json:"display_name" validate:"max=100"`
+	DisplayName string `json:"display_name" validate:"omitempty,min=1,max=100"`
 	Username    string `json:"username" validate:"required,min=3,max=32,username_format"`
 	Password    string `json:"password" validate:"required,min=8,max_bytes=72,password_strength"`
 }
 
-// Sanitize limpia y normaliza los datos de entrada
+type CheckAvailabilityRequest struct {
+	Value string `json:"value" validate:"required,min=3,max=32,username_format"`
+}
+
 func (u *NewUserRequest) Sanitize() {
 	p := bluemonday.StrictPolicy()
 	u.Name = pgx.Identifier{strings.TrimSpace(p.Sanitize(u.Name))}.Sanitize()
@@ -34,7 +37,26 @@ func (s *Server) RegisterHandler(c echo.Context) error {
 		return err
 	}
 
-	_, err := s.service.CreateUser(nuser.Name, nuser.DisplayName, nuser.Username, nuser.Password, c.Request().Context())
+	// Verificar que el username esté disponible
+	ctx := c.Request().Context()
+	isAvailable, err := s.service.IsUsernameAvailable(nuser.Username, ctx)
+	if err != nil {
+		log := GetLogger(c)
+		log.Error("failed to check username availability during registration",
+			zap.String("username", nuser.Username),
+			zap.Error(err))
+		return c.JSON(500, map[string]string{"error": "could not validate username"})
+	}
+	if !isAvailable {
+		return c.JSON(409, map[string]interface{}{
+			"error": "validation failed",
+			"details": map[string]string{
+				"Username": "Username is already taken",
+			},
+		})
+	}
+
+	_, err = s.service.CreateUser(nuser.Name, nuser.DisplayName, nuser.Username, nuser.Password, ctx)
 	if err != nil {
 		log := GetLogger(c)
 		log.Error("failed to create user",
@@ -54,14 +76,16 @@ func (s *Server) loginHandler(c echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
+	log := GetLogger(c)
+
 	user, err := s.service.ValidateUserCredentials(creds.Username, creds.Password, ctx)
 	if err != nil {
-		log := GetLogger(c)
-		log.Warn("login attempt failed",
+		log.Warn("user login attempt failed",
 			zap.String("username", creds.Username),
 			zap.Error(err))
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid credentials"})
 	}
+
 	claims := &JWTClaims{
 		EntityId:   user.ID.String(),
 		EntityType: "user",
@@ -77,5 +101,32 @@ func (s *Server) loginHandler(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "could not generate token"})
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{"token": t, "iat": claims.RegisteredClaims.IssuedAt.String(), "exp": claims.RegisteredClaims.ExpiresAt.String()})
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"token": t,
+		"type":  "user",
+		"iat":   claims.RegisteredClaims.IssuedAt.String(),
+		"exp":   claims.RegisteredClaims.ExpiresAt.String(),
+	})
+}
+
+func (s *Server) checkUsernameAvailability(c echo.Context) error {
+	req := new(CheckAvailabilityRequest)
+	if err := BindAndValidate(c, req); err != nil {
+		return err
+	}
+
+	ctx := c.Request().Context()
+	isAvailable, err := s.service.IsUsernameAvailable(req.Value, ctx)
+	if err != nil {
+		log := GetLogger(c)
+		log.Error("failed to check username availability",
+			zap.String("username", req.Value),
+			zap.Error(err))
+		return c.JSON(500, map[string]string{"error": "could not check username availability"})
+	}
+
+	return c.JSON(200, map[string]interface{}{
+		"available": isAvailable,
+		"username":  req.Value,
+	})
 }
