@@ -17,7 +17,7 @@ type Question struct {
 // Fields of the Question.
 func (Question) Fields() []ent.Field {
 	return []ent.Field{
-		field.UUID("id", uuid.New()),
+		field.UUID("id", uuid.New()).Default(uuid.New).Immutable(),
 		field.String("theme").MaxRuneLen(255),
 		field.Int64("created_at").DefaultFunc(func() int64 { return time.Now().UnixMilli() }).Immutable(),
 		field.String("text"),

@@ -61,6 +61,14 @@ func (_c *MemberCreate) SetID(v uuid.UUID) *MemberCreate {
 	return _c
 }
 
+// SetNillableID sets the "id" field if the given value is not nil.
+func (_c *MemberCreate) SetNillableID(v *uuid.UUID) *MemberCreate {
+	if v != nil {
+		_c.SetID(*v)
+	}
+	return _c
+}
+
 // SetUserID sets the "user" edge to the User entity by ID.
 func (_c *MemberCreate) SetUserID(id uuid.UUID) *MemberCreate {
 	_c.mutation.SetUserID(id)
@@ -144,6 +152,10 @@ func (_c *MemberCreate) defaults() {
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := member.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
+	}
+	if _, ok := _c.mutation.ID(); !ok {
+		v := member.DefaultID()
+		_c.mutation.SetID(v)
 	}
 }
 

@@ -9,6 +9,8 @@ import (
 	"radgifa/ent/questionnaire"
 	"radgifa/ent/schema"
 	"radgifa/ent/user"
+
+	"github.com/google/uuid"
 )
 
 // The init function reads all schema descriptors with runtime code
@@ -25,12 +27,20 @@ func init() {
 	answerDescUpdatedAt := answerFields[3].Descriptor()
 	// answer.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	answer.DefaultUpdatedAt = answerDescUpdatedAt.Default.(func() int64)
+	// answerDescID is the schema descriptor for id field.
+	answerDescID := answerFields[0].Descriptor()
+	// answer.DefaultID holds the default value on creation for the id field.
+	answer.DefaultID = answerDescID.Default.(func() uuid.UUID)
 	memberFields := schema.Member{}.Fields()
 	_ = memberFields
 	// memberDescCreatedAt is the schema descriptor for created_at field.
 	memberDescCreatedAt := memberFields[2].Descriptor()
 	// member.DefaultCreatedAt holds the default value on creation for the created_at field.
 	member.DefaultCreatedAt = memberDescCreatedAt.Default.(func() int64)
+	// memberDescID is the schema descriptor for id field.
+	memberDescID := memberFields[0].Descriptor()
+	// member.DefaultID holds the default value on creation for the id field.
+	member.DefaultID = memberDescID.Default.(func() uuid.UUID)
 	questionFields := schema.Question{}.Fields()
 	_ = questionFields
 	// questionDescTheme is the schema descriptor for theme field.
@@ -41,6 +51,10 @@ func init() {
 	questionDescCreatedAt := questionFields[2].Descriptor()
 	// question.DefaultCreatedAt holds the default value on creation for the created_at field.
 	question.DefaultCreatedAt = questionDescCreatedAt.Default.(func() int64)
+	// questionDescID is the schema descriptor for id field.
+	questionDescID := questionFields[0].Descriptor()
+	// question.DefaultID holds the default value on creation for the id field.
+	question.DefaultID = questionDescID.Default.(func() uuid.UUID)
 	questionnaireFields := schema.Questionnaire{}.Fields()
 	_ = questionnaireFields
 	// questionnaireDescIsPublished is the schema descriptor for is_published field.
@@ -51,10 +65,18 @@ func init() {
 	questionnaireDescCreatedAt := questionnaireFields[4].Descriptor()
 	// questionnaire.DefaultCreatedAt holds the default value on creation for the created_at field.
 	questionnaire.DefaultCreatedAt = questionnaireDescCreatedAt.Default.(func() int64)
+	// questionnaireDescID is the schema descriptor for id field.
+	questionnaireDescID := questionnaireFields[0].Descriptor()
+	// questionnaire.DefaultID holds the default value on creation for the id field.
+	questionnaire.DefaultID = questionnaireDescID.Default.(func() uuid.UUID)
 	userFields := schema.User{}.Fields()
 	_ = userFields
 	// userDescCreatedAt is the schema descriptor for created_at field.
 	userDescCreatedAt := userFields[4].Descriptor()
 	// user.DefaultCreatedAt holds the default value on creation for the created_at field.
 	user.DefaultCreatedAt = userDescCreatedAt.Default.(func() int64)
+	// userDescID is the schema descriptor for id field.
+	userDescID := userFields[0].Descriptor()
+	// user.DefaultID holds the default value on creation for the id field.
+	user.DefaultID = userDescID.Default.(func() uuid.UUID)
 }

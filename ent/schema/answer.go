@@ -17,7 +17,7 @@ type Answer struct {
 // Fields of the Answer.
 func (Answer) Fields() []ent.Field {
 	return []ent.Field{
-		field.UUID("id", uuid.New()),
+		field.UUID("id", uuid.New()).Default(uuid.New).Immutable(),
 		field.Enum("answer_value").Values("Yes", "No", "Pass"),
 		field.Int64("created_at").DefaultFunc(func() int64 { return time.Now().UnixMilli() }).Immutable(),
 		field.Int64("updated_at").DefaultFunc(func() int64 { return time.Now().UnixMilli() }),

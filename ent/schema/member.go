@@ -18,7 +18,7 @@ type Member struct {
 // Fields of the Member.
 func (Member) Fields() []ent.Field {
 	return []ent.Field{
-		field.UUID("id", uuid.New()),
+		field.UUID("id", uuid.New()).Default(uuid.New).Immutable(),
 		field.String("display_name"),
 		field.Int64("created_at").DefaultFunc(func() int64 { return time.Now().UnixMilli() }).Immutable(),
 		field.String("unique_identifier").Comment("Something that only the member knows so they can prove who they are"),
