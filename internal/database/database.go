@@ -331,13 +331,26 @@ func (s *service) GetMemberByUserAndQuestionnaire(userID, questionnaireID uuid.U
 }
 
 func (s *service) CreateAnswer(memberID, questionID uuid.UUID, answerValue string, ctx context.Context) (*ent.Answer, error) {
-	answer, err := s.client.Answer.Create().
+	existingAnswer, err := s.client.Answer.Query().
+		Where(
+			answer.HasMemberWith(member.ID(memberID)),
+			answer.HasQuestionWith(question.ID(questionID)),
+		).Only(ctx)
+
+	if err == nil {
+		return existingAnswer.Update().
+			SetAnswerValue(answer.AnswerValue(answerValue)).
+			SetUpdatedAt(time.Now().UnixMilli()).
+			Save(ctx)
+	}
+
+	if !ent.IsNotFound(err) {
+		return nil, err
+	}
+
+	return s.client.Answer.Create().
 		SetMemberID(memberID).
 		SetQuestionID(questionID).
 		SetAnswerValue(answer.AnswerValue(answerValue)).
 		Save(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return answer, nil
 }
