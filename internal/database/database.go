@@ -13,6 +13,9 @@ import (
 
 	"radgifa/ent"
 	"radgifa/ent/answer"
+	"radgifa/ent/member"
+	"radgifa/ent/question"
+	"radgifa/ent/questionnaire"
 	"radgifa/ent/user"
 
 	"entgo.io/ent/dialect"
@@ -196,9 +199,7 @@ func (s *service) ValidateUserCredentials(username, password string, ctx context
 
 func (s *service) IsUsernameAvailable(username string, ctx context.Context) (bool, error) {
 	count, err := s.client.User.Query().
-		Where(func(u *enSQL.Selector) {
-			u.Where(enSQL.EQ("username", username))
-		}).
+		Where(user.Username(username)).
 		Count(ctx)
 	if err != nil {
 		return false, err
@@ -221,9 +222,7 @@ func (s *service) CreateQuestionnaire(userID uuid.UUID, title, description strin
 func (s *service) GetQuestionnaire(questionnaireID uuid.UUID, ctx context.Context) (*ent.Questionnaire, error) {
 	questionnaire, err := s.client.Questionnaire.
 		Query().
-		Where(func(q *enSQL.Selector) {
-			q.Where(enSQL.EQ("id", questionnaireID))
-		}).
+		Where(questionnaire.ID(questionnaireID)).
 		WithOwner().
 		Only(ctx)
 	if err != nil {
@@ -270,9 +269,7 @@ func (s *service) CreateAnonymousMember(questionnaireID uuid.UUID, uniqueIdentif
 
 func (s *service) ValidateMemberCredentials(uniqueIdentifier, passcode string, ctx context.Context) (*ent.Member, error) {
 	member, err := s.client.Member.Query().
-		Where(func(m *enSQL.Selector) {
-			m.Where(enSQL.EQ("unique_identifier", uniqueIdentifier))
-		}).
+		Where(member.UniqueIdentifier(uniqueIdentifier)).
 		Only(ctx)
 	if err != nil {
 		return nil, err
@@ -287,21 +284,17 @@ func (s *service) ValidateMemberCredentials(uniqueIdentifier, passcode string, c
 
 func (s *service) GetMemberWithQuestionnaire(memberID uuid.UUID, ctx context.Context) (*ent.Member, error) {
 	return s.client.Member.Query().
-		Where(func(m *enSQL.Selector) {
-			m.Where(enSQL.EQ("id", memberID))
-		}).
+		Where(member.ID(memberID)).
 		WithQuestionnaire().
 		Only(ctx)
 }
 
 func (s *service) IsMemberIdentifierAvailable(questionnaireID uuid.UUID, uniqueIdentifier string, ctx context.Context) (bool, error) {
 	count, err := s.client.Member.Query().
-		Where(func(m *enSQL.Selector) {
-			m.Where(enSQL.And(
-				enSQL.EQ("questionnaire_id", questionnaireID),
-				enSQL.EQ("unique_identifier", uniqueIdentifier),
-			))
-		}).
+		Where(
+			member.HasQuestionnaireWith(questionnaire.ID(questionnaireID)),
+			member.UniqueIdentifier(uniqueIdentifier),
+		).
 		Count(ctx)
 	if err != nil {
 		return false, err
@@ -323,21 +316,17 @@ func (s *service) CreateNewQuestion(questionnaireID uuid.UUID, text, theme strin
 
 func (s *service) GetQuestionWithQuestionnaire(questionID uuid.UUID, ctx context.Context) (*ent.Question, error) {
 	return s.client.Question.Query().
-		Where(func(q *enSQL.Selector) {
-			q.Where(enSQL.EQ("id", questionID))
-		}).
+		Where(question.ID(questionID)).
 		WithQuestionnaire().
 		Only(ctx)
 }
 
 func (s *service) GetMemberByUserAndQuestionnaire(userID, questionnaireID uuid.UUID, ctx context.Context) (*ent.Member, error) {
 	return s.client.Member.Query().
-		Where(func(m *enSQL.Selector) {
-			m.Where(enSQL.And(
-				enSQL.EQ("user_id", userID),
-				enSQL.EQ("questionnaire_id", questionnaireID),
-			))
-		}).
+		Where(
+			member.HasUserWith(user.ID(userID)),
+			member.HasQuestionnaireWith(questionnaire.ID(questionnaireID)),
+		).
 		Only(ctx)
 }
 
