@@ -27,6 +27,11 @@ type NewMemberRequest struct {
 	Passcode         string `json:"passcode" validate:"omitempty,len=8"`
 }
 
+type NewQuestionRequest struct {
+	Theme string `json:"theme" validate:"omitempty,max=255"`
+	Text  string `json:"text" validate:"required,min=1"`
+}
+
 func (m *NewMemberRequest) Sanitize() {
 	p := bluemonday.StrictPolicy()
 	m.Action = strings.ToLower(strings.TrimSpace(m.Action))
@@ -243,7 +248,11 @@ func (s *Server) generateQuestionnaireInvitation(c echo.Context) error {
 		return c.JSON(404, map[string]string{"error": "questionnaire not found"})
 	}
 
-	if questionnaire.Edges.Owner == nil || questionnaire.Edges.Owner.ID != userID {
+	u, err := questionnaire.QueryOwner().Only(ctx)
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "could not verify questionnaire owner"})
+	}
+	if u.ID.String() != userID.String() {
 		return c.JSON(403, map[string]string{"error": "not authorized to invite to this questionnaire"})
 	}
 
@@ -296,4 +305,42 @@ func (s *Server) checkMemberIdentifierAvailability(c echo.Context) error {
 		"available":         isAvailable,
 		"unique_identifier": req.Value,
 	})
+}
+
+func (s *Server) createNewQuestion(c echo.Context) error {
+	entityIDStr, entityType, err := GetValuesFromToken(c)
+	if err != nil || entityType != "user" {
+		return c.JSON(401, map[string]string{"error": "unauthorized, invalid token"})
+	}
+	_, err = uuid.Parse(entityIDStr)
+	if err != nil {
+		return c.JSON(401, map[string]string{"error": "unauthorized, invalid token"})
+	}
+	questionnaireID := c.Param("id")
+	nq := new(NewQuestionRequest)
+	if err := BindAndValidate(c, nq); err != nil {
+		return err
+	}
+	ctx := c.Request().Context()
+	questionnaireUUID, err := uuid.Parse(questionnaireID)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid questionnaire ID"})
+	}
+	q, err := s.service.GetQuestionnaire(questionnaireUUID, ctx)
+	if err != nil {
+		return c.JSON(404, map[string]string{"error": "questionnaire not found"})
+	}
+	u, err := q.QueryOwner().Only(ctx)
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "could not verify questionnaire owner"})
+	}
+	if u.ID.String() != entityIDStr {
+		return c.JSON(403, map[string]string{"error": "not authorized to add questions to this questionnaire"})
+	}
+
+	question, err := s.service.CreateNewQuestion(questionnaireUUID, nq.Text, nq.Theme, ctx)
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "could not create question"})
+	}
+	return c.JSON(201, map[string]any{"question_id": question.ID})
 }

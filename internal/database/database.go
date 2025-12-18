@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"radgifa/ent"
+	"radgifa/ent/answer"
 	"radgifa/ent/user"
 
 	"entgo.io/ent/dialect"
@@ -42,6 +43,10 @@ type Service interface {
 	ValidateMemberCredentials(uniqueIdentifier, passcode string, ctx context.Context) (*ent.Member, error)
 	GetMemberWithQuestionnaire(memberID uuid.UUID, ctx context.Context) (*ent.Member, error)
 	IsMemberIdentifierAvailable(questionnaireID uuid.UUID, uniqueIdentifier string, ctx context.Context) (bool, error)
+	CreateNewQuestion(questionnaireID uuid.UUID, text, theme string, ctx context.Context) (*ent.Question, error)
+	GetQuestionWithQuestionnaire(questionID uuid.UUID, ctx context.Context) (*ent.Question, error)
+	GetMemberByUserAndQuestionnaire(userID, questionnaireID uuid.UUID, ctx context.Context) (*ent.Member, error)
+	CreateAnswer(memberID, questionID uuid.UUID, answerValue string, ctx context.Context) (*ent.Answer, error)
 }
 
 type service struct {
@@ -157,13 +162,11 @@ func getCurrentBcryptCost() int {
 	return cost
 }
 
-// generateSecurePasscode genera un passcode de 8 caracteres alfanuméricos
 func generateSecurePasscode() (string, error) {
 	bytes := make([]byte, 6) // 6 bytes = 48 bits
 	if _, err := rand.Read(bytes); err != nil {
 		return "", err
 	}
-	// Usar hex encoding y tomar los primeros 8 caracteres
 	return hex.EncodeToString(bytes)[:8], nil
 }
 
@@ -243,13 +246,11 @@ func (s *service) CreateMember(userID, questionnaireID uuid.UUID, uniqueIdentifi
 }
 
 func (s *service) CreateAnonymousMember(questionnaireID uuid.UUID, uniqueIdentifier, displayName string, ctx context.Context) (*ent.Member, string, error) {
-	// Generar passcode aleatorio
 	passcode, err := generateSecurePasscode()
 	if err != nil {
 		return nil, "", err
 	}
 
-	// Hash del passcode para almacenar
 	hashedPasscode, err := bcrypt.GenerateFromPassword([]byte(passcode), bcryptCost)
 	if err != nil {
 		return nil, "", err
@@ -277,7 +278,6 @@ func (s *service) ValidateMemberCredentials(uniqueIdentifier, passcode string, c
 		return nil, err
 	}
 
-	// Verificar passcode
 	err = bcrypt.CompareHashAndPassword(member.PassCode, []byte(passcode))
 	if err != nil {
 		return nil, err
@@ -307,4 +307,48 @@ func (s *service) IsMemberIdentifierAvailable(questionnaireID uuid.UUID, uniqueI
 		return false, err
 	}
 	return count == 0, nil
+}
+
+func (s *service) CreateNewQuestion(questionnaireID uuid.UUID, text, theme string, ctx context.Context) (*ent.Question, error) {
+	question, err := s.client.Question.Create().
+		SetQuestionnaireID(questionnaireID).
+		SetText(text).
+		SetTheme(theme).
+		Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return question, nil
+}
+
+func (s *service) GetQuestionWithQuestionnaire(questionID uuid.UUID, ctx context.Context) (*ent.Question, error) {
+	return s.client.Question.Query().
+		Where(func(q *enSQL.Selector) {
+			q.Where(enSQL.EQ("id", questionID))
+		}).
+		WithQuestionnaire().
+		Only(ctx)
+}
+
+func (s *service) GetMemberByUserAndQuestionnaire(userID, questionnaireID uuid.UUID, ctx context.Context) (*ent.Member, error) {
+	return s.client.Member.Query().
+		Where(func(m *enSQL.Selector) {
+			m.Where(enSQL.And(
+				enSQL.EQ("user_id", userID),
+				enSQL.EQ("questionnaire_id", questionnaireID),
+			))
+		}).
+		Only(ctx)
+}
+
+func (s *service) CreateAnswer(memberID, questionID uuid.UUID, answerValue string, ctx context.Context) (*ent.Answer, error) {
+	answer, err := s.client.Answer.Create().
+		SetMemberID(memberID).
+		SetQuestionID(questionID).
+		SetAnswerValue(answer.AnswerValue(answerValue)).
+		Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return answer, nil
 }
