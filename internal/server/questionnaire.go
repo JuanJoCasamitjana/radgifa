@@ -481,10 +481,11 @@ func (s *Server) getQuestionnaireQuestions(c echo.Context) error {
 	isOwner := entityType == "user" && questionnaire.Edges.Owner.ID == userID
 	isMember := false
 
-	if entityType == "user" {
+	switch entityType {
+	case "user":
 		_, err := s.service.GetMemberByUserAndQuestionnaire(userID, qID, ctx)
 		isMember = err == nil
-	} else if entityType == "member" {
+	case "member":
 		member, err := s.service.GetMemberWithQuestionnaire(userID, ctx)
 		isMember = err == nil && member.Edges.Questionnaire.ID == qID
 	}
