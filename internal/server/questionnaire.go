@@ -344,3 +344,206 @@ func (s *Server) createNewQuestion(c echo.Context) error {
 	}
 	return c.JSON(201, map[string]any{"question_id": question.ID})
 }
+
+// getUserQuestionnaires returns all questionnaires owned by the authenticated user
+func (s *Server) getUserQuestionnaires(c echo.Context) error {
+	entityIDStr, entityType, err := GetValuesFromToken(c)
+	if err != nil || entityType != "user" {
+		return c.JSON(401, map[string]string{"error": "unauthorized, invalid token"})
+	}
+	userID, err := uuid.Parse(entityIDStr)
+	if err != nil {
+		return c.JSON(401, map[string]string{"error": "unauthorized, invalid token"})
+	}
+
+	ctx := c.Request().Context()
+	questionnaires, err := s.service.GetUserQuestionnaires(userID, ctx)
+	if err != nil {
+		log := GetLogger(c)
+		log.Error("failed to get user questionnaires",
+			zap.String("user_id", userID.String()),
+			zap.Error(err))
+		return c.JSON(500, map[string]string{"error": "could not get questionnaires"})
+	}
+
+	return c.JSON(200, questionnaires)
+}
+
+// getQuestionnaireDetails returns questionnaire details if user is owner or member
+func (s *Server) getQuestionnaireDetails(c echo.Context) error {
+	questionnaireID := c.Param("id")
+	qID, err := uuid.Parse(questionnaireID)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid questionnaire ID"})
+	}
+
+	entityIDStr, entityType, err := GetValuesFromToken(c)
+	if err != nil {
+		return c.JSON(401, map[string]string{"error": "unauthorized, invalid token"})
+	}
+
+	ctx := c.Request().Context()
+	questionnaire, err := s.service.GetQuestionnaireWithDetails(qID, ctx)
+	if err != nil {
+		return c.JSON(404, map[string]string{"error": "questionnaire not found"})
+	}
+
+	// Check permissions: only owner or members can see details
+	userID, _ := uuid.Parse(entityIDStr)
+	isOwner := entityType == "user" && questionnaire.Edges.Owner.ID == userID
+	isMember := false
+
+	switch entityType {
+	case "user":
+		// Check if user is a member
+		_, err := s.service.GetMemberByUserAndQuestionnaire(userID, qID, ctx)
+		isMember = err == nil
+	case "member":
+		// Check if this member belongs to this questionnaire
+		member, err := s.service.GetMemberWithQuestionnaire(userID, ctx)
+		isMember = err == nil && member.Edges.Questionnaire.ID == qID
+	}
+
+	if !isOwner && !isMember {
+		return c.JSON(403, map[string]string{"error": "forbidden"})
+	}
+
+	return c.JSON(200, questionnaire)
+}
+
+// getQuestionnaireQuestions returns questions for a questionnaire if user has access
+func (s *Server) getQuestionnaireQuestions(c echo.Context) error {
+	questionnaireID := c.Param("id")
+	qID, err := uuid.Parse(questionnaireID)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid questionnaire ID"})
+	}
+
+	entityIDStr, entityType, err := GetValuesFromToken(c)
+	if err != nil {
+		return c.JSON(401, map[string]string{"error": "unauthorized, invalid token"})
+	}
+
+	ctx := c.Request().Context()
+	// First check if questionnaire exists and user has access
+	questionnaire, err := s.service.GetQuestionnaireWithDetails(qID, ctx)
+	if err != nil {
+		return c.JSON(404, map[string]string{"error": "questionnaire not found"})
+	}
+
+	userID, _ := uuid.Parse(entityIDStr)
+	isOwner := entityType == "user" && questionnaire.Edges.Owner.ID == userID
+	isMember := false
+
+	if entityType == "user" {
+		_, err := s.service.GetMemberByUserAndQuestionnaire(userID, qID, ctx)
+		isMember = err == nil
+	} else if entityType == "member" {
+		member, err := s.service.GetMemberWithQuestionnaire(userID, ctx)
+		isMember = err == nil && member.Edges.Questionnaire.ID == qID
+	}
+
+	if !isOwner && !isMember {
+		return c.JSON(403, map[string]string{"error": "forbidden"})
+	}
+
+	questions, err := s.service.GetQuestionnaireQuestions(qID, ctx)
+	if err != nil {
+		log := GetLogger(c)
+		log.Error("failed to get questionnaire questions",
+			zap.String("questionnaire_id", qID.String()),
+			zap.Error(err))
+		return c.JSON(500, map[string]string{"error": "could not get questions"})
+	}
+
+	return c.JSON(200, questions)
+}
+
+// getQuestionnaireMembers returns members for a questionnaire if user is owner
+func (s *Server) getQuestionnaireMembers(c echo.Context) error {
+	questionnaireID := c.Param("id")
+	qID, err := uuid.Parse(questionnaireID)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid questionnaire ID"})
+	}
+
+	entityIDStr, entityType, err := GetValuesFromToken(c)
+	if err != nil || entityType != "user" {
+		return c.JSON(401, map[string]string{"error": "unauthorized, invalid token"})
+	}
+
+	userID, err := uuid.Parse(entityIDStr)
+	if err != nil {
+		return c.JSON(401, map[string]string{"error": "unauthorized, invalid token"})
+	}
+
+	ctx := c.Request().Context()
+	questionnaire, err := s.service.GetQuestionnaireWithDetails(qID, ctx)
+	if err != nil {
+		return c.JSON(404, map[string]string{"error": "questionnaire not found"})
+	}
+
+	// Only owner can see members
+	if questionnaire.Edges.Owner.ID != userID {
+		return c.JSON(403, map[string]string{"error": "forbidden"})
+	}
+
+	members, err := s.service.GetQuestionnaireMembers(qID, ctx)
+	if err != nil {
+		log := GetLogger(c)
+		log.Error("failed to get questionnaire members",
+			zap.String("questionnaire_id", qID.String()),
+			zap.Error(err))
+		return c.JSON(500, map[string]string{"error": "could not get members"})
+	}
+
+	return c.JSON(200, members)
+}
+
+// getMemberAnswers returns answers by the authenticated member/user for a questionnaire
+func (s *Server) getMemberAnswers(c echo.Context) error {
+	questionnaireID := c.Param("id")
+	qID, err := uuid.Parse(questionnaireID)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid questionnaire ID"})
+	}
+
+	entityIDStr, entityType, err := GetValuesFromToken(c)
+	if err != nil {
+		return c.JSON(401, map[string]string{"error": "unauthorized, invalid token"})
+	}
+
+	ctx := c.Request().Context()
+	var memberID uuid.UUID
+
+	switch entityType {
+	case "user":
+		userID, _ := uuid.Parse(entityIDStr)
+		member, err := s.service.GetMemberByUserAndQuestionnaire(userID, qID, ctx)
+		if err != nil {
+			return c.JSON(404, map[string]string{"error": "not a member of this questionnaire"})
+		}
+		memberID = member.ID
+	case "member":
+		memberID, _ = uuid.Parse(entityIDStr)
+		// Verify member belongs to this questionnaire
+		member, err := s.service.GetMemberWithQuestionnaire(memberID, ctx)
+		if err != nil || member.Edges.Questionnaire.ID != qID {
+			return c.JSON(403, map[string]string{"error": "forbidden"})
+		}
+	default:
+		return c.JSON(401, map[string]string{"error": "invalid token type"})
+	}
+
+	answers, err := s.service.GetMemberAnswers(memberID, qID, ctx)
+	if err != nil {
+		log := GetLogger(c)
+		log.Error("failed to get member answers",
+			zap.String("member_id", memberID.String()),
+			zap.String("questionnaire_id", qID.String()),
+			zap.Error(err))
+		return c.JSON(500, map[string]string{"error": "could not get answers"})
+	}
+
+	return c.JSON(200, answers)
+}

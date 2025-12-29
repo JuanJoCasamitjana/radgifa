@@ -115,9 +115,17 @@ func (s *Server) RegisterRoutes() http.Handler {
 	jwtMiddleware := echojwt.JWT(jwtSecret)
 	api.Use(jwtMiddleware)
 
+	// Questionnaire endpoints
+	api.GET("/questionnaires", s.getUserQuestionnaires)
 	api.POST("/questionnaires", s.createQuestionnaire)
+	api.GET("/questionnaires/:id", s.getQuestionnaireDetails)
+	api.GET("/questionnaires/:id/questions", s.getQuestionnaireQuestions)
+	api.GET("/questionnaires/:id/members", s.getQuestionnaireMembers)
+	api.GET("/questionnaires/:id/my-answers", s.getMemberAnswers)
 	api.POST("/questionnaires/:id/invite", s.generateQuestionnaireInvitation)
 	api.POST("/questionnaires/:id/question", s.createNewQuestion)
+
+	// Question endpoints
 	api.POST("/question/:id", s.newQuestionAnswer)
 
 	e.GET("/health", s.healthHandler)

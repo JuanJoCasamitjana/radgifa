@@ -50,6 +50,13 @@ type Service interface {
 	GetQuestionWithQuestionnaire(questionID uuid.UUID, ctx context.Context) (*ent.Question, error)
 	GetMemberByUserAndQuestionnaire(userID, questionnaireID uuid.UUID, ctx context.Context) (*ent.Member, error)
 	CreateAnswer(memberID, questionID uuid.UUID, answerValue string, ctx context.Context) (*ent.Answer, error)
+
+	// New GET methods
+	GetUserQuestionnaires(userID uuid.UUID, ctx context.Context) ([]*ent.Questionnaire, error)
+	GetQuestionnaireWithDetails(questionnaireID uuid.UUID, ctx context.Context) (*ent.Questionnaire, error)
+	GetQuestionnaireQuestions(questionnaireID uuid.UUID, ctx context.Context) ([]*ent.Question, error)
+	GetQuestionnaireMembers(questionnaireID uuid.UUID, ctx context.Context) ([]*ent.Member, error)
+	GetMemberAnswers(memberID, questionnaireID uuid.UUID, ctx context.Context) ([]*ent.Answer, error)
 }
 
 type service struct {
@@ -353,4 +360,59 @@ func (s *service) CreateAnswer(memberID, questionID uuid.UUID, answerValue strin
 		SetQuestionID(questionID).
 		SetAnswerValue(answer.AnswerValue(answerValue)).
 		Save(ctx)
+}
+
+// GetUserQuestionnaires returns all questionnaires owned by a user
+func (s *service) GetUserQuestionnaires(userID uuid.UUID, ctx context.Context) ([]*ent.Questionnaire, error) {
+	return s.client.Questionnaire.Query().
+		Where(questionnaire.HasOwnerWith(user.ID(userID))).
+		Order(ent.Desc("created_at")).
+		All(ctx)
+}
+
+// GetQuestionnaireWithDetails returns a questionnaire with all its relations
+func (s *service) GetQuestionnaireWithDetails(questionnaireID uuid.UUID, ctx context.Context) (*ent.Questionnaire, error) {
+	return s.client.Questionnaire.Query().
+		Where(questionnaire.ID(questionnaireID)).
+		WithOwner().
+		WithMembers(func(q *ent.MemberQuery) {
+			q.WithUser()
+		}).
+		WithQuestions(func(q *ent.QuestionQuery) {
+			q.WithAnswers(func(a *ent.AnswerQuery) {
+				a.WithMember()
+			})
+		}).
+		Only(ctx)
+}
+
+// GetQuestionnaireQuestions returns all questions for a questionnaire
+func (s *service) GetQuestionnaireQuestions(questionnaireID uuid.UUID, ctx context.Context) ([]*ent.Question, error) {
+	return s.client.Question.Query().
+		Where(question.HasQuestionnaireWith(questionnaire.ID(questionnaireID))).
+		Order(ent.Asc("created_at")).
+		All(ctx)
+}
+
+// GetQuestionnaireMembers returns all members of a questionnaire
+func (s *service) GetQuestionnaireMembers(questionnaireID uuid.UUID, ctx context.Context) ([]*ent.Member, error) {
+	return s.client.Member.Query().
+		Where(member.HasQuestionnaireWith(questionnaire.ID(questionnaireID))).
+		WithUser().
+		Order(ent.Asc("created_at")).
+		All(ctx)
+}
+
+// GetMemberAnswers returns all answers by a member for a specific questionnaire
+func (s *service) GetMemberAnswers(memberID, questionnaireID uuid.UUID, ctx context.Context) ([]*ent.Answer, error) {
+	return s.client.Answer.Query().
+		Where(
+			answer.HasMemberWith(member.ID(memberID)),
+			answer.HasQuestionWith(
+				question.HasQuestionnaireWith(questionnaire.ID(questionnaireID)),
+			),
+		).
+		WithQuestion().
+		Order(ent.Asc("created_at")).
+		All(ctx)
 }
