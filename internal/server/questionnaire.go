@@ -9,7 +9,6 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/labstack/echo/v4"
 	"github.com/microcosm-cc/bluemonday"
 	"go.uber.org/zap"
@@ -36,13 +35,19 @@ func (m *NewMemberRequest) Sanitize() {
 	p := bluemonday.StrictPolicy()
 	m.Action = strings.ToLower(strings.TrimSpace(m.Action))
 	m.UniqueIdentifier = strings.ToLower(strings.TrimSpace(m.UniqueIdentifier))
-	m.DisplayName = pgx.Identifier{strings.TrimSpace(p.Sanitize(m.DisplayName))}.Sanitize()
+	m.DisplayName = strings.TrimSpace(p.Sanitize(m.DisplayName))
 }
 
 func (q *NewQuestionnaireRequest) Sanitize() {
 	p := bluemonday.StrictPolicy()
-	q.Title = pgx.Identifier{strings.TrimSpace(p.Sanitize(q.Title))}.Sanitize()
-	q.Description = pgx.Identifier{strings.TrimSpace(p.Sanitize(q.Description))}.Sanitize()
+	q.Title = strings.TrimSpace(p.Sanitize(q.Title))
+	q.Description = strings.TrimSpace(p.Sanitize(q.Description))
+}
+
+func (nq *NewQuestionRequest) Sanitize() {
+	p := bluemonday.StrictPolicy()
+	nq.Text = strings.TrimSpace(p.Sanitize(nq.Text))
+	nq.Theme = strings.TrimSpace(p.Sanitize(nq.Theme))
 }
 
 // createQuestionnaire creates a new questionnaire
@@ -71,6 +76,8 @@ func (s *Server) createQuestionnaire(c echo.Context) error {
 	if err := BindAndValidate(c, nq); err != nil {
 		return err
 	}
+
+	nq.Sanitize()
 
 	ctx := c.Request().Context()
 
@@ -404,6 +411,11 @@ func (s *Server) createNewQuestion(c echo.Context) error {
 	if err := BindAndValidate(c, nq); err != nil {
 		return err
 	}
+
+	logger := GetLogger(c)
+	logger.Info("Creating new question", zap.String("questionnaire_id", questionnaireID), zap.String("text", nq.Text), zap.String("theme", nq.Theme))
+	nq.Sanitize()
+
 	ctx := c.Request().Context()
 	questionnaireUUID, err := uuid.Parse(questionnaireID)
 	if err != nil {

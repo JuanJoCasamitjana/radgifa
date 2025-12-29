@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/jackc/pgx/v5"
 	"github.com/labstack/echo/v4"
 	"github.com/microcosm-cc/bluemonday"
 	"go.uber.org/zap"
@@ -25,8 +24,8 @@ type CheckAvailabilityRequest struct {
 
 func (u *NewUserRequest) Sanitize() {
 	p := bluemonday.StrictPolicy()
-	u.Name = pgx.Identifier{strings.TrimSpace(p.Sanitize(u.Name))}.Sanitize()
-	u.DisplayName = pgx.Identifier{strings.TrimSpace(p.Sanitize(u.DisplayName))}.Sanitize()
+	u.Name = strings.TrimSpace(p.Sanitize(u.Name))
+	u.DisplayName = strings.TrimSpace(p.Sanitize(u.DisplayName))
 	u.Username = strings.ToLower(strings.TrimSpace(u.Username))
 	// No sanitizamos password para preservar espacios intencionales
 }

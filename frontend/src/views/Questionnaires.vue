@@ -112,6 +112,9 @@
           </div>
           
           <div class="card-actions">
+            <button @click.stop="manageQuestions(questionnaire.id)" class="action-link">
+              Questions
+            </button>
             <button @click.stop="editQuestionnaire(questionnaire.id)" class="action-link">
               Edit
             </button>
@@ -151,6 +154,9 @@
           <div class="col-responses">{{ questionnaire.responseCount }}</div>
           <div class="col-created">{{ formatDate(questionnaire.createdAt) }}</div>
           <div class="col-actions">
+            <button @click.stop="manageQuestions(questionnaire.id)" class="action-btn small">
+              Questions
+            </button>
             <button @click.stop="editQuestionnaire(questionnaire.id)" class="action-btn small">
               Edit
             </button>
@@ -298,6 +304,10 @@ const createNew = () => {
 
 const openQuestionnaire = (id) => {
   alert(`Opening questionnaire ${id} - functionality coming soon`)
+}
+
+const manageQuestions = (id) => {
+  router.push(`/questionnaire/${id}/questions`)
 }
 
 const editQuestionnaire = (id) => {

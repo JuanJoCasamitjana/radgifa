@@ -7,6 +7,7 @@ import Register from '../views/Register.vue'
 import Dashboard from '../views/Dashboard.vue'
 import CreateQuestionnaire from '../views/CreateQuestionnaire.vue'
 import Questionnaires from '../views/Questionnaires.vue'
+import QuestionnaireQuestions from '../views/QuestionnaireQuestions.vue'
 
 const routes = [
   {
@@ -43,6 +44,12 @@ const routes = [
     path: '/questionnaires',
     name: 'Questionnaires',
     component: Questionnaires,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/questionnaire/:id/questions',
+    name: 'QuestionnaireQuestions',
+    component: QuestionnaireQuestions,
     meta: { requiresAuth: true }
   },
   {
