@@ -16,20 +16,20 @@ import (
 )
 
 type NewQuestionnaireRequest struct {
-	Title       string `json:"title" validate:"required,min=1,max=200,no_whitespace_only"`
-	Description string `json:"description" validate:"omitempty,max=1000"`
+	Title       string `json:"title" validate:"required,min=1,max=200,no_whitespace_only" example:"Best Pizza Topping"`
+	Description string `json:"description" validate:"omitempty,max=1000" example:"Let's decide which pizza topping to order for the team lunch"`
 }
 
 type NewMemberRequest struct {
-	Action           string `json:"action" validate:"required,oneof=login register"`
-	UniqueIdentifier string `json:"unique_identifier" validate:"required,min=3,max=32,username_format"`
-	DisplayName      string `json:"display_name" validate:"omitempty,min=1,max=100"`
-	Passcode         string `json:"passcode" validate:"omitempty,len=8"`
+	Action           string `json:"action" validate:"required,oneof=login register" example:"register"`
+	UniqueIdentifier string `json:"unique_identifier" validate:"required,min=3,max=32,username_format" example:"participant123"`
+	DisplayName      string `json:"display_name" validate:"omitempty,min=1,max=100" example:"Anonymous Participant"`
+	Passcode         string `json:"passcode" validate:"omitempty,len=8" example:"ABC12345"`
 }
 
 type NewQuestionRequest struct {
-	Theme string `json:"theme" validate:"omitempty,max=255"`
-	Text  string `json:"text" validate:"required,min=1"`
+	Theme string `json:"theme" validate:"omitempty,max=255" example:"Food Preferences"`
+	Text  string `json:"text" validate:"required,min=1" example:"Do you like pepperoni pizza?"`
 }
 
 func (m *NewMemberRequest) Sanitize() {
@@ -45,6 +45,19 @@ func (q *NewQuestionnaireRequest) Sanitize() {
 	q.Description = pgx.Identifier{strings.TrimSpace(p.Sanitize(q.Description))}.Sanitize()
 }
 
+// createQuestionnaire creates a new questionnaire
+// @Summary Create questionnaire
+// @Description Create a new questionnaire for group decision making
+// @Tags questionnaires
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param questionnaire body NewQuestionnaireRequest true "Questionnaire data"
+// @Success 201 {object} map[string]interface{} "Questionnaire ID"
+// @Failure 400 {object} map[string]string "Bad request"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /api/questionnaires [post]
 func (s *Server) createQuestionnaire(c echo.Context) error {
 	entityIDStr, entityType, err := GetValuesFromToken(c)
 	if err != nil || entityType != "user" {
@@ -346,6 +359,15 @@ func (s *Server) createNewQuestion(c echo.Context) error {
 }
 
 // getUserQuestionnaires returns all questionnaires owned by the authenticated user
+// @Summary Get user questionnaires
+// @Description Get all questionnaires owned by the authenticated user
+// @Tags questionnaires
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {array} object "List of questionnaires"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /api/questionnaires [get]
 func (s *Server) getUserQuestionnaires(c echo.Context) error {
 	entityIDStr, entityType, err := GetValuesFromToken(c)
 	if err != nil || entityType != "user" {
@@ -370,6 +392,18 @@ func (s *Server) getUserQuestionnaires(c echo.Context) error {
 }
 
 // getQuestionnaireDetails returns questionnaire details if user is owner or member
+// @Summary Get questionnaire details
+// @Description Get detailed information about a questionnaire including questions and answers (if owner) or just questions (if member)
+// @Tags questionnaires
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Questionnaire ID"
+// @Success 200 {object} object "Questionnaire details"
+// @Failure 400 {object} map[string]string "Bad request"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 403 {object} map[string]string "Forbidden"
+// @Failure 404 {object} map[string]string "Not found"
+// @Router /api/questionnaires/{id} [get]
 func (s *Server) getQuestionnaireDetails(c echo.Context) error {
 	questionnaireID := c.Param("id")
 	qID, err := uuid.Parse(questionnaireID)
@@ -412,6 +446,18 @@ func (s *Server) getQuestionnaireDetails(c echo.Context) error {
 }
 
 // getQuestionnaireQuestions returns questions for a questionnaire if user has access
+// @Summary Get questionnaire questions
+// @Description Get all questions for a specific questionnaire
+// @Tags questionnaires
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Questionnaire ID"
+// @Success 200 {array} object "List of questions"
+// @Failure 400 {object} map[string]string "Bad request"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 403 {object} map[string]string "Forbidden"
+// @Failure 404 {object} map[string]string "Not found"
+// @Router /api/questionnaires/{id}/questions [get]
 func (s *Server) getQuestionnaireQuestions(c echo.Context) error {
 	questionnaireID := c.Param("id")
 	qID, err := uuid.Parse(questionnaireID)
@@ -501,6 +547,18 @@ func (s *Server) getQuestionnaireMembers(c echo.Context) error {
 }
 
 // getMemberAnswers returns answers by the authenticated member/user for a questionnaire
+// @Summary Get member answers
+// @Description Get all answers provided by the authenticated user/member for a specific questionnaire
+// @Tags questionnaires
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Questionnaire ID"
+// @Success 200 {array} object "List of answers"
+// @Failure 400 {object} map[string]string "Bad request"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 403 {object} map[string]string "Forbidden"
+// @Failure 404 {object} map[string]string "Not found"
+// @Router /api/questionnaires/{id}/my-answers [get]
 func (s *Server) getMemberAnswers(c echo.Context) error {
 	questionnaireID := c.Param("id")
 	qID, err := uuid.Parse(questionnaireID)

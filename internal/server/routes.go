@@ -13,6 +13,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/natefinch/lumberjack"
+	echoSwagger "github.com/swaggo/echo-swagger"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/time/rate"
@@ -28,8 +29,8 @@ var (
 )
 
 type LoginCredentials struct {
-	Username string `json:"username" validate:"required,min=3,max=32"`
-	Password string `json:"password" validate:"required,min=8"`
+	Username string `json:"username" validate:"required,min=3,max=32" example:"johndoe"`
+	Password string `json:"password" validate:"required,min=8" example:"password123"`
 }
 
 type JWTClaims struct {
@@ -130,6 +131,9 @@ func (s *Server) RegisterRoutes() http.Handler {
 
 	e.GET("/health", s.healthHandler)
 
+	// Swagger endpoint
+	e.GET("/swagger/*", echoSwagger.WrapHandler)
+
 	return e
 }
 
@@ -159,6 +163,17 @@ func setRequestsPerSecondLimit() rate.Limit {
 }
 
 func (s *Server) healthHandler(c echo.Context) error {
+	return c.JSON(http.StatusOK, s.service.Health())
+}
+
+// healthHandler returns the health status of the API
+// @Summary Health check
+// @Description Get the health status of the API
+// @Tags health
+// @Produce json
+// @Success 200 {object} map[string]string "Health status"
+// @Router /health [get]
+func (s *Server) HealthHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, s.service.Health())
 }
 

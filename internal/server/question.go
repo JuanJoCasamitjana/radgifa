@@ -9,7 +9,7 @@ import (
 )
 
 type AnswerRequest struct {
-	AnswerValue string `json:"answer_value" validate:"required,oneof=Yes No Pass"`
+	AnswerValue string `json:"answer_value" validate:"required,oneof=Yes No Pass" example:"Yes"`
 }
 
 func (s *Server) newQuestionAnswer(c echo.Context) error {

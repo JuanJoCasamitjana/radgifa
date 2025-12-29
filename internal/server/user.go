@@ -13,14 +13,14 @@ import (
 )
 
 type NewUserRequest struct {
-	Name        string `json:"name" validate:"required,min=1,max=200,no_whitespace_only"`
-	DisplayName string `json:"display_name" validate:"omitempty,min=1,max=100"`
-	Username    string `json:"username" validate:"required,min=3,max=32,username_format"`
-	Password    string `json:"password" validate:"required,min=8,max_bytes=72,password_strength"`
+	Name        string `json:"name" validate:"required,min=1,max=200,no_whitespace_only" example:"John Doe"`
+	DisplayName string `json:"display_name" validate:"omitempty,min=1,max=100" example:"Johnny"`
+	Username    string `json:"username" validate:"required,min=3,max=32,username_format" example:"johndoe"`
+	Password    string `json:"password" validate:"required,min=8,max_bytes=72,password_strength" example:"password123"`
 }
 
 type CheckAvailabilityRequest struct {
-	Value string `json:"value" validate:"required,min=3,max=32,username_format"`
+	Value string `json:"value" validate:"required,min=3,max=32,username_format" example:"johndoe"`
 }
 
 func (u *NewUserRequest) Sanitize() {
@@ -31,6 +31,18 @@ func (u *NewUserRequest) Sanitize() {
 	// No sanitizamos password para preservar espacios intencionales
 }
 
+// RegisterHandler registers a new user
+// @Summary Register a new user
+// @Description Register a new user account
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param user body NewUserRequest true "User registration data"
+// @Success 201 {object} map[string]string "User created successfully"
+// @Failure 400 {object} map[string]string "Bad request"
+// @Failure 409 {object} map[string]string "Username already exists"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /register [post]
 func (s *Server) RegisterHandler(c echo.Context) error {
 	nuser := new(NewUserRequest)
 	if err := BindAndValidate(c, nuser); err != nil {
@@ -69,6 +81,18 @@ func (s *Server) RegisterHandler(c echo.Context) error {
 	return c.JSON(201, map[string]string{"message": "user registered successfully"})
 }
 
+// loginHandler authenticates a user
+// @Summary Login user
+// @Description Authenticate user and return JWT token
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param credentials body LoginCredentials true "Login credentials"
+// @Success 200 {object} map[string]string "JWT token"
+// @Failure 400 {object} map[string]string "Bad request"
+// @Failure 401 {object} map[string]string "Invalid credentials"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /login [post]
 func (s *Server) loginHandler(c echo.Context) error {
 	creds := new(LoginCredentials)
 	if err := BindAndValidate(c, creds); err != nil {

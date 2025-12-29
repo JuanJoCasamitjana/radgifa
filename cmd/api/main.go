@@ -10,8 +10,28 @@ import (
 	"time"
 
 	_ "embed"
+	_ "radgifa/docs"
 	"radgifa/internal/server"
 )
+
+// @title Radgifa API
+// @version 0.1.0
+// @description API for group decision making - Struggling to reach a decision with your friends? Radgifa is here to help you make an informed choice.
+// @termsOfService http://swagger.io/terms/
+
+// @contact.name API Support
+// @contact.email jjcasamitjana@gmail.com
+
+// @license.name MIT
+// @license.url https://github.com/JuanJoCasamitjana/radgifa/blob/main/LICENSE
+
+// @host localhost:8080
+// @BasePath /
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token.
 
 const (
 	appName    = "Radgifa API"

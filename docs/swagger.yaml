@@ -1,0 +1,371 @@
+definitions:
+  server.LoginCredentials:
+    properties:
+      password:
+        example: password123
+        minLength: 8
+        type: string
+      username:
+        example: johndoe
+        maxLength: 32
+        minLength: 3
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  server.NewQuestionnaireRequest:
+    properties:
+      description:
+        example: Let's decide which pizza topping to order for the team lunch
+        maxLength: 1000
+        type: string
+      title:
+        example: Best Pizza Topping
+        maxLength: 200
+        minLength: 1
+        type: string
+    required:
+    - title
+    type: object
+  server.NewUserRequest:
+    properties:
+      display_name:
+        example: Johnny
+        maxLength: 100
+        minLength: 1
+        type: string
+      name:
+        example: John Doe
+        maxLength: 200
+        minLength: 1
+        type: string
+      password:
+        example: password123
+        minLength: 8
+        type: string
+      username:
+        example: johndoe
+        maxLength: 32
+        minLength: 3
+        type: string
+    required:
+    - name
+    - password
+    - username
+    type: object
+info:
+  contact: {}
+paths:
+  /api/questionnaires:
+    get:
+      description: Get all questionnaires owned by the authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of questionnaires
+          schema:
+            items:
+              type: object
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get user questionnaires
+      tags:
+      - questionnaires
+    post:
+      consumes:
+      - application/json
+      description: Create a new questionnaire for group decision making
+      parameters:
+      - description: Questionnaire data
+        in: body
+        name: questionnaire
+        required: true
+        schema:
+          $ref: '#/definitions/server.NewQuestionnaireRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Questionnaire ID
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create questionnaire
+      tags:
+      - questionnaires
+  /api/questionnaires/{id}:
+    get:
+      description: Get detailed information about a questionnaire including questions
+        and answers (if owner) or just questions (if member)
+      parameters:
+      - description: Questionnaire ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Questionnaire details
+          schema:
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get questionnaire details
+      tags:
+      - questionnaires
+  /api/questionnaires/{id}/my-answers:
+    get:
+      description: Get all answers provided by the authenticated user/member for a
+        specific questionnaire
+      parameters:
+      - description: Questionnaire ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of answers
+          schema:
+            items:
+              type: object
+            type: array
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get member answers
+      tags:
+      - questionnaires
+  /api/questionnaires/{id}/questions:
+    get:
+      description: Get all questions for a specific questionnaire
+      parameters:
+      - description: Questionnaire ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of questions
+          schema:
+            items:
+              type: object
+            type: array
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get questionnaire questions
+      tags:
+      - questionnaires
+  /health:
+    get:
+      description: Get the health status of the API
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Health status
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Health check
+      tags:
+      - health
+  /login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate user and return JWT token
+      parameters:
+      - description: Login credentials
+        in: body
+        name: credentials
+        required: true
+        schema:
+          $ref: '#/definitions/server.LoginCredentials'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: JWT token
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Invalid credentials
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Login user
+      tags:
+      - auth
+  /register:
+    post:
+      consumes:
+      - application/json
+      description: Register a new user account
+      parameters:
+      - description: User registration data
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/server.NewUserRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: User created successfully
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Username already exists
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Register a new user
+      tags:
+      - auth
+swagger: "2.0"
