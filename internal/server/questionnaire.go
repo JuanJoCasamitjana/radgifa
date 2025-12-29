@@ -86,6 +86,20 @@ func (s *Server) createQuestionnaire(c echo.Context) error {
 	return c.JSON(201, questionnaire.ID)
 }
 
+// createQuestionnaireMember joins a user to a questionnaire using an invitation token
+// @Summary Join questionnaire
+// @Description Join a questionnaire using an invitation token
+// @Tags questionnaires
+// @Accept json
+// @Produce json
+// @Param token path string true "Invitation token"
+// @Param member body NewMemberRequest true "Member data"
+// @Success 201 {object} map[string]interface{} "Member created successfully"
+// @Failure 400 {object} map[string]string "Bad request"
+// @Failure 401 {object} map[string]string "Invalid token"
+// @Failure 409 {object} map[string]string "Identifier already taken"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /join/{token} [post]
 func (s *Server) createQuestionnaireMember(c echo.Context) error {
 	var userID uuid.UUID
 	if authHeader := c.Request().Header.Get("Authorization"); authHeader != "" {
@@ -232,6 +246,33 @@ func generateInvitationToken() (string, error) {
 	return base64.URLEncoding.EncodeToString(bytes), nil
 }
 
+// generateQuestionnaireInvitation generates an invitation token for a questionnaire
+// @Summary Generate questionnaire invitation
+// @Description Generate an invitation token to allow others to join the questionnaire
+// @Tags questionnaires
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Questionnaire ID"
+// @Success 200 {object} map[string]interface{} "Invitation token and URL"
+// @Failure 400 {object} map[string]string "Bad request"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 403 {object} map[string]string "Forbidden - only owner can generate invitations"
+// @Failure 404 {object} map[string]string "Questionnaire not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// generateQuestionnaireInvitation generates an invitation token for a questionnaire
+// @Summary Generate questionnaire invitation
+// @Description Generate an invitation token to allow others to join the questionnaire
+// @Tags questionnaires
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Questionnaire ID"
+// @Success 200 {object} map[string]interface{} "Invitation token and URL"
+// @Failure 400 {object} map[string]string "Bad request"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 403 {object} map[string]string "Forbidden - only owner can generate invitations"
+// @Failure 404 {object} map[string]string "Questionnaire not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /api/questionnaires/{id}/invite [post]
 func (s *Server) generateQuestionnaireInvitation(c echo.Context) error {
 	entityIDStr, entityType, err := GetValuesFromToken(c)
 	if err != nil || entityType != "user" {
@@ -287,6 +328,19 @@ func (s *Server) generateQuestionnaireInvitation(c echo.Context) error {
 	})
 }
 
+// checkMemberIdentifierAvailability checks if a member identifier is available in a questionnaire
+// @Summary Check member identifier availability
+// @Description Check if a member identifier is available in a specific questionnaire
+// @Tags questionnaires
+// @Accept json
+// @Produce json
+// @Param token path string true "Questionnaire invitation token"
+// @Param availability body CheckAvailabilityRequest true "Identifier to check"
+// @Success 200 {object} map[string]interface{} "Identifier availability status"
+// @Failure 400 {object} map[string]string "Bad request"
+// @Failure 401 {object} map[string]string "Invalid token"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /check/member/{token} [post]
 func (s *Server) checkMemberIdentifierAvailability(c echo.Context) error {
 	req := new(CheckAvailabilityRequest)
 	if err := BindAndValidate(c, req); err != nil {
@@ -320,6 +374,22 @@ func (s *Server) checkMemberIdentifierAvailability(c echo.Context) error {
 	})
 }
 
+// createNewQuestion creates a new question in a questionnaire
+// @Summary Create new question
+// @Description Create a new question in a specific questionnaire (only owner can do this)
+// @Tags questionnaires
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Questionnaire ID"
+// @Param question body NewQuestionRequest true "Question data"
+// @Success 201 {object} map[string]interface{} "Question created successfully"
+// @Failure 400 {object} map[string]string "Bad request"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 403 {object} map[string]string "Forbidden - only owner can create questions"
+// @Failure 404 {object} map[string]string "Questionnaire not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /api/questionnaires/{id}/question [post]
 func (s *Server) createNewQuestion(c echo.Context) error {
 	entityIDStr, entityType, err := GetValuesFromToken(c)
 	if err != nil || entityType != "user" {

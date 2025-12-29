@@ -1,4 +1,26 @@
 definitions:
+  server.AnswerRequest:
+    properties:
+      answer_value:
+        enum:
+        - "Yes"
+        - "No"
+        - Pass
+        example: "Yes"
+        type: string
+    required:
+    - answer_value
+    type: object
+  server.CheckAvailabilityRequest:
+    properties:
+      value:
+        example: johndoe
+        maxLength: 32
+        minLength: 3
+        type: string
+    required:
+    - value
+    type: object
   server.LoginCredentials:
     properties:
       password:
@@ -13,6 +35,44 @@ definitions:
     required:
     - password
     - username
+    type: object
+  server.NewMemberRequest:
+    properties:
+      action:
+        enum:
+        - login
+        - register
+        example: register
+        type: string
+      display_name:
+        example: Anonymous Participant
+        maxLength: 100
+        minLength: 1
+        type: string
+      passcode:
+        example: ABC12345
+        type: string
+      unique_identifier:
+        example: participant123
+        maxLength: 32
+        minLength: 3
+        type: string
+    required:
+    - action
+    - unique_identifier
+    type: object
+  server.NewQuestionRequest:
+    properties:
+      text:
+        example: Do you like pepperoni pizza?
+        minLength: 1
+        type: string
+      theme:
+        example: Food Preferences
+        maxLength: 255
+        type: string
+    required:
+    - text
     type: object
   server.NewQuestionnaireRequest:
     properties:
@@ -57,6 +117,66 @@ definitions:
 info:
   contact: {}
 paths:
+  /api/question/{id}:
+    post:
+      consumes:
+      - application/json
+      description: Create an answer for a specific question in a questionnaire
+      parameters:
+      - description: Question ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Answer data
+        in: body
+        name: answer
+        required: true
+        schema:
+          $ref: '#/definitions/server.AnswerRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Answer created successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Question not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Answer a question
+      tags:
+      - questions
   /api/questionnaires:
     get:
       description: Get all questionnaires owned by the authenticated user
@@ -174,6 +294,68 @@ paths:
       summary: Get questionnaire details
       tags:
       - questionnaires
+  /api/questionnaires/{id}/invite:
+    post:
+      description: |-
+        Generate an invitation token to allow others to join the questionnaire
+        Generate an invitation token to allow others to join the questionnaire
+      parameters:
+      - description: Questionnaire ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Questionnaire ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      - application/json
+      responses:
+        "200":
+          description: Invitation token and URL
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden - only owner can generate invitations
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Questionnaire not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      - BearerAuth: []
+      summary: Generate questionnaire invitation
+      tags:
+      - questionnaires
+      - questionnaires
   /api/questionnaires/{id}/my-answers:
     get:
       description: Get all answers provided by the authenticated user/member for a
@@ -220,6 +402,67 @@ paths:
       security:
       - BearerAuth: []
       summary: Get member answers
+      tags:
+      - questionnaires
+  /api/questionnaires/{id}/question:
+    post:
+      consumes:
+      - application/json
+      description: Create a new question in a specific questionnaire (only owner can
+        do this)
+      parameters:
+      - description: Questionnaire ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Question data
+        in: body
+        name: question
+        required: true
+        schema:
+          $ref: '#/definitions/server.NewQuestionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Question created successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden - only owner can create questions
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Questionnaire not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create new question
       tags:
       - questionnaires
   /api/questionnaires/{id}/questions:
@@ -269,6 +512,87 @@ paths:
       summary: Get questionnaire questions
       tags:
       - questionnaires
+  /check/member/{token}:
+    post:
+      consumes:
+      - application/json
+      description: Check if a member identifier is available in a specific questionnaire
+      parameters:
+      - description: Questionnaire invitation token
+        in: path
+        name: token
+        required: true
+        type: string
+      - description: Identifier to check
+        in: body
+        name: availability
+        required: true
+        schema:
+          $ref: '#/definitions/server.CheckAvailabilityRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Identifier availability status
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Invalid token
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Check member identifier availability
+      tags:
+      - questionnaires
+  /check/username:
+    post:
+      consumes:
+      - application/json
+      description: Check if a username is available for registration
+      parameters:
+      - description: Username to check
+        in: body
+        name: availability
+        required: true
+        schema:
+          $ref: '#/definitions/server.CheckAvailabilityRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Username availability status
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Check username availability
+      tags:
+      - auth
   /health:
     get:
       description: Get the health status of the API
@@ -284,6 +608,58 @@ paths:
       summary: Health check
       tags:
       - health
+  /join/{token}:
+    post:
+      consumes:
+      - application/json
+      description: Join a questionnaire using an invitation token
+      parameters:
+      - description: Invitation token
+        in: path
+        name: token
+        required: true
+        type: string
+      - description: Member data
+        in: body
+        name: member
+        required: true
+        schema:
+          $ref: '#/definitions/server.NewMemberRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Member created successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Invalid token
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Identifier already taken
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Join questionnaire
+      tags:
+      - questionnaires
   /login:
     post:
       consumes:

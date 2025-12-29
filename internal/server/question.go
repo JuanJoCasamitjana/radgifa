@@ -12,6 +12,22 @@ type AnswerRequest struct {
 	AnswerValue string `json:"answer_value" validate:"required,oneof=Yes No Pass" example:"Yes"`
 }
 
+// newQuestionAnswer creates an answer for a specific question
+// @Summary Answer a question
+// @Description Create an answer for a specific question in a questionnaire
+// @Tags questions
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Question ID"
+// @Param answer body AnswerRequest true "Answer data"
+// @Success 201 {object} map[string]interface{} "Answer created successfully"
+// @Failure 400 {object} map[string]string "Bad request"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 403 {object} map[string]string "Forbidden"
+// @Failure 404 {object} map[string]string "Question not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /api/question/{id} [post]
 func (s *Server) newQuestionAnswer(c echo.Context) error {
 	log := GetLogger(c)
 

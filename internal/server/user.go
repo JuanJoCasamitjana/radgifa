@@ -133,6 +133,17 @@ func (s *Server) loginHandler(c echo.Context) error {
 	})
 }
 
+// checkUsernameAvailability checks if a username is available
+// @Summary Check username availability
+// @Description Check if a username is available for registration
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param availability body CheckAvailabilityRequest true "Username to check"
+// @Success 200 {object} map[string]interface{} "Username availability status"
+// @Failure 400 {object} map[string]string "Bad request"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /check/username [post]
 func (s *Server) checkUsernameAvailability(c echo.Context) error {
 	req := new(CheckAvailabilityRequest)
 	if err := BindAndValidate(c, req); err != nil {
