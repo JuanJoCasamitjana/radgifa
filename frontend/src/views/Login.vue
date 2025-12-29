@@ -16,6 +16,7 @@
             placeholder="Enter your username"
             :class="{ 'error': errors.username }"
             :disabled="loading"
+            @input="onInput"
             required
           />
           <span v-if="errors.username" class="error-message">{{ errors.username }}</span>
@@ -31,7 +32,7 @@
               placeholder="Enter your password"
               :class="{ 'error': errors.password }"
               :disabled="loading"
-              @input="onPasswordInput"
+              @input="onInput"
               required
             />
             <button

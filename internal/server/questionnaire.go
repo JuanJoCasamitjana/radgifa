@@ -31,6 +31,16 @@ type NewQuestionRequest struct {
 	Text  string `json:"text" validate:"required,min=1" example:"Do you like pepperoni pizza?"`
 }
 
+type UpdateQuestionnaireRequest struct {
+	Title       string `json:"title" validate:"required,min=1,max=200,no_whitespace_only" example:"Updated Pizza Topping"`
+	Description string `json:"description" validate:"omitempty,max=1000" example:"Updated description for the questionnaire"`
+}
+
+type UpdateQuestionRequest struct {
+	Theme string `json:"theme" validate:"omitempty,max=255" example:"Updated Food Preferences"`
+	Text  string `json:"text" validate:"required,min=1" example:"Do you still like pepperoni pizza?"`
+}
+
 func (m *NewMemberRequest) Sanitize() {
 	p := bluemonday.StrictPolicy()
 	m.Action = strings.ToLower(strings.TrimSpace(m.Action))
@@ -48,6 +58,18 @@ func (nq *NewQuestionRequest) Sanitize() {
 	p := bluemonday.StrictPolicy()
 	nq.Text = strings.TrimSpace(p.Sanitize(nq.Text))
 	nq.Theme = strings.TrimSpace(p.Sanitize(nq.Theme))
+}
+
+func (uq *UpdateQuestionnaireRequest) Sanitize() {
+	p := bluemonday.StrictPolicy()
+	uq.Title = strings.TrimSpace(p.Sanitize(uq.Title))
+	uq.Description = strings.TrimSpace(p.Sanitize(uq.Description))
+}
+
+func (uq *UpdateQuestionRequest) Sanitize() {
+	p := bluemonday.StrictPolicy()
+	uq.Text = strings.TrimSpace(p.Sanitize(uq.Text))
+	uq.Theme = strings.TrimSpace(p.Sanitize(uq.Theme))
 }
 
 // createQuestionnaire creates a new questionnaire
@@ -438,6 +460,352 @@ func (s *Server) createNewQuestion(c echo.Context) error {
 		return c.JSON(500, map[string]string{"error": "could not create question"})
 	}
 	return c.JSON(201, map[string]any{"question_id": question.ID})
+}
+
+// updateQuestionnaire updates an existing questionnaire (only if not published)
+// @Summary Update questionnaire
+// @Description Update a questionnaire's title and description (only owner and only if not published)
+// @Tags questionnaires
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Questionnaire ID"
+// @Param questionnaire body UpdateQuestionnaireRequest true "Updated questionnaire data"
+// @Success 200 {object} map[string]interface{} "Questionnaire updated successfully"
+// @Failure 400 {object} map[string]string "Bad request"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 403 {object} map[string]string "Forbidden - only owner can update or questionnaire is published"
+// @Failure 404 {object} map[string]string "Questionnaire not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /api/questionnaires/{id} [put]
+func (s *Server) updateQuestionnaire(c echo.Context) error {
+	entityIDStr, entityType, err := GetValuesFromToken(c)
+	if err != nil || entityType != "user" {
+		return c.JSON(401, map[string]string{"error": "unauthorized, invalid token"})
+	}
+	userID, err := uuid.Parse(entityIDStr)
+	if err != nil {
+		return c.JSON(401, map[string]string{"error": "unauthorized, invalid token"})
+	}
+
+	questionnaireID := c.Param("id")
+	questionnaireUUID, err := uuid.Parse(questionnaireID)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid questionnaire ID"})
+	}
+
+	uq := new(UpdateQuestionnaireRequest)
+	if err := BindAndValidate(c, uq); err != nil {
+		return err
+	}
+
+	uq.Sanitize()
+
+	ctx := c.Request().Context()
+
+	q, err := s.service.GetQuestionnaire(questionnaireUUID, ctx)
+	if err != nil {
+		return c.JSON(404, map[string]string{"error": "questionnaire not found"})
+	}
+
+	u, err := q.QueryOwner().Only(ctx)
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "could not verify questionnaire owner"})
+	}
+
+	if u.ID != userID {
+		return c.JSON(403, map[string]string{"error": "not authorized to update this questionnaire"})
+	}
+
+	if q.IsPublished {
+		return c.JSON(403, map[string]string{"error": "cannot update published questionnaire"})
+	}
+
+	updatedQuestionnaire, err := s.service.UpdateQuestionnaire(questionnaireUUID, uq.Title, uq.Description, ctx)
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "could not update questionnaire"})
+	}
+
+	return c.JSON(200, updatedQuestionnaire)
+}
+
+// publishQuestionnaire publishes a questionnaire (makes it immutable)
+// @Summary Publish questionnaire
+// @Description Publish a questionnaire to make it available for responses (becomes immutable)
+// @Tags questionnaires
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Questionnaire ID"
+// @Success 200 {object} map[string]interface{} "Questionnaire published successfully"
+// @Failure 400 {object} map[string]string "Bad request"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 403 {object} map[string]string "Forbidden - only owner can publish"
+// @Failure 404 {object} map[string]string "Questionnaire not found"
+// @Failure 409 {object} map[string]string "Questionnaire already published"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /api/questionnaires/{id}/publish [post]
+func (s *Server) publishQuestionnaire(c echo.Context) error {
+	entityIDStr, entityType, err := GetValuesFromToken(c)
+	if err != nil || entityType != "user" {
+		return c.JSON(401, map[string]string{"error": "unauthorized, invalid token"})
+	}
+	userID, err := uuid.Parse(entityIDStr)
+	if err != nil {
+		return c.JSON(401, map[string]string{"error": "unauthorized, invalid token"})
+	}
+
+	questionnaireID := c.Param("id")
+	questionnaireUUID, err := uuid.Parse(questionnaireID)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid questionnaire ID"})
+	}
+
+	ctx := c.Request().Context()
+
+	q, err := s.service.GetQuestionnaire(questionnaireUUID, ctx)
+	if err != nil {
+		return c.JSON(404, map[string]string{"error": "questionnaire not found"})
+	}
+
+	u, err := q.QueryOwner().Only(ctx)
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "could not verify questionnaire owner"})
+	}
+
+	if u.ID != userID {
+		return c.JSON(403, map[string]string{"error": "not authorized to publish this questionnaire"})
+	}
+
+	if q.IsPublished {
+		return c.JSON(409, map[string]string{"error": "questionnaire already published"})
+	}
+
+	updatedQuestionnaire, err := s.service.PublishQuestionnaire(questionnaireUUID, ctx)
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "could not publish questionnaire"})
+	}
+
+	return c.JSON(200, updatedQuestionnaire)
+}
+
+// deleteQuestionnaire deletes a questionnaire and all related data (only if not published)
+// @Summary Delete questionnaire
+// @Description Delete a questionnaire and all its questions and members (only owner and only if not published)
+// @Tags questionnaires
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Questionnaire ID"
+// @Success 200 {object} map[string]string "Questionnaire deleted successfully"
+// @Failure 400 {object} map[string]string "Bad request"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 403 {object} map[string]string "Forbidden - only owner can delete or questionnaire is published"
+// @Failure 404 {object} map[string]string "Questionnaire not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /api/questionnaires/{id} [delete]
+func (s *Server) deleteQuestionnaire(c echo.Context) error {
+	entityIDStr, entityType, err := GetValuesFromToken(c)
+	if err != nil || entityType != "user" {
+		return c.JSON(401, map[string]string{"error": "unauthorized, invalid token"})
+	}
+	userID, err := uuid.Parse(entityIDStr)
+	if err != nil {
+		return c.JSON(401, map[string]string{"error": "unauthorized, invalid token"})
+	}
+
+	questionnaireID := c.Param("id")
+	questionnaireUUID, err := uuid.Parse(questionnaireID)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid questionnaire ID"})
+	}
+
+	ctx := c.Request().Context()
+
+	q, err := s.service.GetQuestionnaire(questionnaireUUID, ctx)
+	if err != nil {
+		return c.JSON(404, map[string]string{"error": "questionnaire not found"})
+	}
+
+	u, err := q.QueryOwner().Only(ctx)
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "could not verify questionnaire owner"})
+	}
+
+	if u.ID != userID {
+		return c.JSON(403, map[string]string{"error": "not authorized to delete this questionnaire"})
+	}
+
+	if q.IsPublished {
+		return c.JSON(403, map[string]string{"error": "cannot delete published questionnaire"})
+	}
+
+	err = s.service.DeleteQuestionnaire(questionnaireUUID, ctx)
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "could not delete questionnaire"})
+	}
+
+	return c.JSON(200, map[string]string{"message": "questionnaire deleted successfully"})
+}
+
+// updateQuestion updates an existing question (only if questionnaire not published)
+// @Summary Update question
+// @Description Update a question's text and theme (only owner and only if questionnaire not published)
+// @Tags questionnaires
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param questionnaireId path string true "Questionnaire ID"
+// @Param questionId path string true "Question ID"
+// @Param question body UpdateQuestionRequest true "Updated question data"
+// @Success 200 {object} map[string]interface{} "Question updated successfully"
+// @Failure 400 {object} map[string]string "Bad request"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 403 {object} map[string]string "Forbidden - only owner can update or questionnaire is published"
+// @Failure 404 {object} map[string]string "Question or questionnaire not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /api/questionnaires/{questionnaireId}/questions/{questionId} [put]
+func (s *Server) updateQuestion(c echo.Context) error {
+	entityIDStr, entityType, err := GetValuesFromToken(c)
+	if err != nil || entityType != "user" {
+		return c.JSON(401, map[string]string{"error": "unauthorized, invalid token"})
+	}
+	userID, err := uuid.Parse(entityIDStr)
+	if err != nil {
+		return c.JSON(401, map[string]string{"error": "unauthorized, invalid token"})
+	}
+
+	questionnaireID := c.Param("questionnaireId")
+	questionID := c.Param("questionId")
+
+	questionnaireUUID, err := uuid.Parse(questionnaireID)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid questionnaire ID"})
+	}
+
+	questionUUID, err := uuid.Parse(questionID)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid question ID"})
+	}
+
+	uq := new(UpdateQuestionRequest)
+	if err := BindAndValidate(c, uq); err != nil {
+		return err
+	}
+
+	uq.Sanitize()
+
+	ctx := c.Request().Context()
+
+	q, err := s.service.GetQuestionnaire(questionnaireUUID, ctx)
+	if err != nil {
+		return c.JSON(404, map[string]string{"error": "questionnaire not found"})
+	}
+
+	u, err := q.QueryOwner().Only(ctx)
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "could not verify questionnaire owner"})
+	}
+
+	if u.ID != userID {
+		return c.JSON(403, map[string]string{"error": "not authorized to update questions in this questionnaire"})
+	}
+
+	if q.IsPublished {
+		return c.JSON(403, map[string]string{"error": "cannot update questions in published questionnaire"})
+	}
+
+	question, err := s.service.GetQuestionWithQuestionnaire(questionUUID, ctx)
+	if err != nil {
+		return c.JSON(404, map[string]string{"error": "question not found"})
+	}
+
+	if question.Edges.Questionnaire.ID != questionnaireUUID {
+		return c.JSON(400, map[string]string{"error": "question does not belong to specified questionnaire"})
+	}
+
+	updatedQuestion, err := s.service.UpdateQuestion(questionUUID, uq.Text, uq.Theme, ctx)
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "could not update question"})
+	}
+
+	return c.JSON(200, updatedQuestion)
+}
+
+// deleteQuestion deletes a question (only if questionnaire not published)
+// @Summary Delete question
+// @Description Delete a question from a questionnaire (only owner and only if questionnaire not published)
+// @Tags questionnaires
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param questionnaireId path string true "Questionnaire ID"
+// @Param questionId path string true "Question ID"
+// @Success 200 {object} map[string]string "Question deleted successfully"
+// @Failure 400 {object} map[string]string "Bad request"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 403 {object} map[string]string "Forbidden - only owner can delete or questionnaire is published"
+// @Failure 404 {object} map[string]string "Question or questionnaire not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /api/questionnaires/{questionnaireId}/questions/{questionId} [delete]
+func (s *Server) deleteQuestion(c echo.Context) error {
+	entityIDStr, entityType, err := GetValuesFromToken(c)
+	if err != nil || entityType != "user" {
+		return c.JSON(401, map[string]string{"error": "unauthorized, invalid token"})
+	}
+	userID, err := uuid.Parse(entityIDStr)
+	if err != nil {
+		return c.JSON(401, map[string]string{"error": "unauthorized, invalid token"})
+	}
+
+	questionnaireID := c.Param("questionnaireId")
+	questionID := c.Param("questionId")
+
+	questionnaireUUID, err := uuid.Parse(questionnaireID)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid questionnaire ID"})
+	}
+
+	questionUUID, err := uuid.Parse(questionID)
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid question ID"})
+	}
+
+	ctx := c.Request().Context()
+
+	q, err := s.service.GetQuestionnaire(questionnaireUUID, ctx)
+	if err != nil {
+		return c.JSON(404, map[string]string{"error": "questionnaire not found"})
+	}
+
+	u, err := q.QueryOwner().Only(ctx)
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "could not verify questionnaire owner"})
+	}
+
+	if u.ID != userID {
+		return c.JSON(403, map[string]string{"error": "not authorized to delete questions in this questionnaire"})
+	}
+
+	if q.IsPublished {
+		return c.JSON(403, map[string]string{"error": "cannot delete questions in published questionnaire"})
+	}
+
+	question, err := s.service.GetQuestionWithQuestionnaire(questionUUID, ctx)
+	if err != nil {
+		return c.JSON(404, map[string]string{"error": "question not found"})
+	}
+
+	if question.Edges.Questionnaire.ID != questionnaireUUID {
+		return c.JSON(400, map[string]string{"error": "question does not belong to specified questionnaire"})
+	}
+
+	err = s.service.DeleteQuestion(questionUUID, ctx)
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "could not delete question"})
+	}
+
+	return c.JSON(200, map[string]string{"message": "question deleted successfully"})
 }
 
 // getUserQuestionnaires returns all questionnaires owned by the authenticated user

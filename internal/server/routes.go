@@ -120,11 +120,16 @@ func (s *Server) RegisterRoutes() http.Handler {
 	api.GET("/questionnaires", s.getUserQuestionnaires)
 	api.POST("/questionnaires", s.createQuestionnaire)
 	api.GET("/questionnaires/:id", s.getQuestionnaireDetails)
+	api.PUT("/questionnaires/:id", s.updateQuestionnaire)
+	api.DELETE("/questionnaires/:id", s.deleteQuestionnaire)
+	api.POST("/questionnaires/:id/publish", s.publishQuestionnaire)
 	api.GET("/questionnaires/:id/questions", s.getQuestionnaireQuestions)
 	api.GET("/questionnaires/:id/members", s.getQuestionnaireMembers)
 	api.GET("/questionnaires/:id/my-answers", s.getMemberAnswers)
 	api.POST("/questionnaires/:id/invite", s.generateQuestionnaireInvitation)
 	api.POST("/questionnaires/:id/question", s.createNewQuestion)
+	api.PUT("/questionnaires/:questionnaireId/questions/:questionId", s.updateQuestion)
+	api.DELETE("/questionnaires/:questionnaireId/questions/:questionId", s.deleteQuestion)
 
 	// Question endpoints
 	api.POST("/question/:id", s.newQuestionAnswer)

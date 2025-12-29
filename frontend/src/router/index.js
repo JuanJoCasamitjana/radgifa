@@ -8,6 +8,7 @@ import Dashboard from '../views/Dashboard.vue'
 import CreateQuestionnaire from '../views/CreateQuestionnaire.vue'
 import Questionnaires from '../views/Questionnaires.vue'
 import QuestionnaireQuestions from '../views/QuestionnaireQuestions.vue'
+import QuestionnaireResponses from '../views/QuestionnaireResponses.vue'
 
 const routes = [
   {
@@ -50,6 +51,12 @@ const routes = [
     path: '/questionnaire/:id/questions',
     name: 'QuestionnaireQuestions',
     component: QuestionnaireQuestions,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/questionnaire/:id/responses',
+    name: 'QuestionnaireResponses',
+    component: QuestionnaireResponses,
     meta: { requiresAuth: true }
   },
   {

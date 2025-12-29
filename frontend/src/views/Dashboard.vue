@@ -104,6 +104,41 @@
       </div>
     </div>
   </div>
+
+  <!-- Modal de Confirmación de Eliminación -->
+  <div v-if="showDeleteModal" class="modal-overlay" @click="closeDeleteModal">
+    <div class="modal-content" @click.stop>
+      <div class="modal-header">
+        <h2>Delete Questionnaire</h2>
+        <button @click="closeDeleteModal" class="close-btn">
+          <Icon name="x" />
+        </button>
+      </div>
+      
+      <div class="modal-body">
+        <div class="warning-icon">
+          <Icon name="alert-triangle" />
+        </div>
+        <p class="warning-text">
+          Are you sure you want to delete 
+          <strong>"{{ questionnaireToDelete?.title }}"</strong>?
+        </p>
+        <p class="warning-subtext">
+          This action cannot be undone. All questions and responses will be permanently deleted.
+        </p>
+      </div>
+      
+      <div class="modal-footer">
+        <button @click="closeDeleteModal" class="cancel-btn">
+          Cancel
+        </button>
+        <button @click="confirmDelete" class="delete-btn">
+          <Icon name="trash" />
+          Delete Questionnaire
+        </button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup>
@@ -115,33 +150,34 @@ import Icon from '../components/Icon.vue'
 
 const router = useRouter()
 
-// Estado
+
 const loading = ref(false)
 const questionnaires = ref([])
 
-// Stats reactivos
+
+const showDeleteModal = ref(false)
+const questionnaireToDelete = ref(null)
+
+
 const stats = reactive({
   totalQuestionnaires: 0,
   totalResponses: 0
 })
 
-// Usuario actual
+
 const currentUser = getters.currentUser
 
-// Cargar datos
+
 const loadData = async () => {
   loading.value = true
   try {
-    // Load real questionnaires from API
+
     const response = await questionnaireAPI.getMyQuestionnaires()
     
-    // Clean up and normalize the data (same as in Questionnaires.vue)
     const cleanedData = (response.data || []).map(q => ({
       ...q,
-      // Remove extra quotes from strings
       title: (q.title || '').replace(/^"|"$/g, ''),
       description: (q.description || '').replace(/^"|"$/g, ''),
-      // Add missing properties with defaults
       responseCount: parseInt(q.responseCount || q.responses || 0, 10) || 0,
       createdAt: q.created_at || q.createdAt || q.date || Date.now()
     }))
@@ -152,7 +188,6 @@ const loadData = async () => {
     console.log('Dashboard - Stats after update:', stats)
   } catch (error) {
     console.error('Error loading questionnaires:', error)
-    // Initialize empty if API fails
     questionnaires.value = []
     updateStats()
   } finally {
@@ -160,18 +195,15 @@ const loadData = async () => {
   }
 }
 
-// Actualizar estadísticas
 const updateStats = () => {
   stats.totalQuestionnaires = questionnaires.value.length
-  
-  // Calculate total responses with safe number handling
+
   stats.totalResponses = questionnaires.value.reduce((sum, q) => {
     const responseCount = parseInt(q.responseCount, 10) || 0
     return sum + responseCount
   }, 0)
 }
 
-// Formatear fecha
 const formatDate = (date) => {
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
@@ -180,7 +212,6 @@ const formatDate = (date) => {
   }).format(date)
 }
 
-// Acciones
 const createQuestionnaire = () => {
   router.push('/questionnaire/create')
 }
@@ -194,25 +225,58 @@ const refreshData = () => {
 }
 
 const openQuestionnaire = (id) => {
-  alert(`Opening questionnaire ${id} - functionality coming soon`)
+  router.push(`/questionnaire/${id}/questions`)
 }
 
 const editQuestionnaire = (id) => {
-  alert(`Editing questionnaire ${id} - functionality coming soon`)
+  router.push('/questionnaires')
 }
 
 const shareQuestionnaire = (id) => {
-  alert(`Sharing questionnaire ${id} - functionality coming soon`)
+  const questionnaire = questionnaires.value.find(q => q.id === id)
+  if (!questionnaire) return
+  
+  if (!questionnaire.is_published) {
+    alert('Please publish the questionnaire before sharing it.')
+    return
+  }
+
+  const shareUrl = `${window.location.origin}/survey/${id}`
+
+  navigator.clipboard.writeText(shareUrl).then(() => {
+    alert(`Share URL copied to clipboard:\n${shareUrl}`)
+  }).catch(() => {
+    prompt('Copy this URL to share your questionnaire:', shareUrl)
+  })
 }
 
 const deleteQuestionnaire = (id) => {
-  if (confirm('Are you sure you want to delete this questionnaire?')) {
-    questionnaires.value = questionnaires.value.filter(q => q.id !== id)
+  const questionnaire = questionnaires.value.find(q => q.id === id)
+  if (!questionnaire) return
+  
+  questionnaireToDelete.value = questionnaire
+  showDeleteModal.value = true
+}
+
+const confirmDelete = async () => {
+  if (!questionnaireToDelete.value) return
+  
+  try {
+    await questionnaireAPI.deleteQuestionnaire(questionnaireToDelete.value.id)
+    questionnaires.value = questionnaires.value.filter(q => q.id !== questionnaireToDelete.value.id)
     updateStats()
+    closeDeleteModal()
+  } catch (error) {
+    console.error('Error deleting questionnaire:', error)
+    alert(error.response?.data?.error || 'Failed to delete questionnaire')
   }
 }
 
-// Cargar datos al montar el componente
+const closeDeleteModal = () => {
+  showDeleteModal.value = false
+  questionnaireToDelete.value = null
+}
+
 onMounted(() => {
   loadData()
 })

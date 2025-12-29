@@ -30,7 +30,8 @@ api.interceptors.response.use(
   },
   (error) => {
     // Si el token expiró (401), redirigir al login
-    if (error.response?.status === 401) {
+    // PERO solo si NO estamos en la página de login
+    if (error.response?.status === 401 && !window.location.pathname.includes('/login')) {
       localStorage.removeItem('token')
       localStorage.removeItem('user')
       // Redirigir al login (se puede hacer desde el router)
@@ -55,6 +56,15 @@ export const questionnaireAPI = {
   // Crear nuevo cuestionario
   create: (data) => api.post('/api/questionnaires', data),
   
+  // Actualizar cuestionario
+  update: (id, data) => api.put(`/api/questionnaires/${id}`, data),
+  
+  // Eliminar cuestionario
+  delete: (id) => api.delete(`/api/questionnaires/${id}`),
+  
+  // Publicar cuestionario
+  publish: (id) => api.post(`/api/questionnaires/${id}/publish`),
+  
   // Obtener detalles de un cuestionario
   getDetails: (id) => api.get(`/api/questionnaires/${id}`),
   
@@ -72,6 +82,12 @@ export const questionnaireAPI = {
   
   // Crear nueva pregunta
   createQuestion: (id, questionData) => api.post(`/api/questionnaires/${id}/question`, questionData),
+  
+  // Actualizar pregunta
+  updateQuestion: (questionnaireId, questionId, questionData) => api.put(`/api/questionnaires/${questionnaireId}/questions/${questionId}`, questionData),
+  
+  // Eliminar pregunta
+  deleteQuestion: (questionnaireId, questionId) => api.delete(`/api/questionnaires/${questionnaireId}/questions/${questionId}`),
 }
 
 // API methods para participación

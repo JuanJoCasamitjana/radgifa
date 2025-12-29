@@ -96,6 +96,10 @@
           >
           <div class="card-header">
             <h3>{{ questionnaire.title }}</h3>
+            <div v-if="questionnaire.is_published" class="published-badge">
+              <Icon name="check" />
+              Published
+            </div>
           </div>
           
           <p class="card-description">{{ questionnaire.description || 'No description provided' }}</p>
@@ -115,8 +119,11 @@
             <button @click.stop="manageQuestions(questionnaire.id)" class="action-link">
               Questions
             </button>
-            <button @click.stop="editQuestionnaire(questionnaire.id)" class="action-link">
+            <button v-if="!questionnaire.is_published" @click.stop="editQuestionnaire(questionnaire.id)" class="action-link">
               Edit
+            </button>
+            <button v-if="!questionnaire.is_published" @click.stop="publishQuestionnaire(questionnaire.id)" class="action-link publish">
+              Publish
             </button>
             <button @click.stop="viewResponses(questionnaire.id)" class="action-link">
               Responses
@@ -124,7 +131,7 @@
             <button @click.stop="shareQuestionnaire(questionnaire.id)" class="action-link">
               Share
             </button>
-            <button @click.stop="deleteQuestionnaire(questionnaire.id)" class="action-link danger">
+            <button v-if="!questionnaire.is_published" @click.stop="deleteQuestionnaire(questionnaire.id)" class="action-link danger">
               Delete
             </button>
           </div>
@@ -157,13 +164,16 @@
             <button @click.stop="manageQuestions(questionnaire.id)" class="action-btn small">
               Questions
             </button>
-            <button @click.stop="editQuestionnaire(questionnaire.id)" class="action-btn small">
+            <button v-if="!questionnaire.is_published" @click.stop="editQuestionnaire(questionnaire.id)" class="action-btn small">
               Edit
+            </button>
+            <button v-if="!questionnaire.is_published" @click.stop="publishQuestionnaire(questionnaire.id)" class="action-btn small publish">
+              Publish
             </button>
             <button @click.stop="shareQuestionnaire(questionnaire.id)" class="action-btn small">
               Share
             </button>
-            <button @click.stop="deleteQuestionnaire(questionnaire.id)" class="action-btn small danger">
+            <button v-if="!questionnaire.is_published" @click.stop="deleteQuestionnaire(questionnaire.id)" class="action-btn small danger">
               Delete
             </button>
           </div>
@@ -178,6 +188,53 @@
         <p>Try adjusting your search terms or filters.</p>
         <button @click="clearFilters" class="clear-btn">Clear Filters</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Modal de Edición de Cuestionario -->
+  <div v-if="showEditModal" class="modal-overlay" @click="closeEditModal">
+    <div class="modal-content" @click.stop>
+      <div class="modal-header">
+        <h2>Edit Questionnaire</h2>
+        <button @click="closeEditModal" class="close-btn">
+          <Icon name="x" />
+        </button>
+      </div>
+      
+      <form @submit.prevent="saveQuestionnaire" class="modal-body">
+        <div class="form-group">
+          <label for="edit-title">Title *</label>
+          <input
+            id="edit-title"
+            v-model="editForm.title"
+            type="text"
+            required
+            maxlength="200"
+            placeholder="Enter questionnaire title"
+          />
+        </div>
+        
+        <div class="form-group">
+          <label for="edit-description">Description</label>
+          <textarea
+            id="edit-description"
+            v-model="editForm.description"
+            rows="4"
+            maxlength="1000"
+            placeholder="Enter questionnaire description"
+          ></textarea>
+        </div>
+        
+        <div class="modal-footer">
+          <button type="button" @click="closeEditModal" class="cancel-btn">
+            Cancel
+          </button>
+          <button type="submit" :disabled="editLoading" class="save-btn">
+            <Icon v-if="editLoading" name="loading" />
+            {{ editLoading ? 'Saving...' : 'Save Changes' }}
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 </template>
@@ -195,6 +252,15 @@ const loading = ref(false)
 const questionnaires = ref([])
 const viewMode = ref('grid')
 const sortBy = ref('created_desc')
+
+// Modal de edición
+const showEditModal = ref(false)
+const editLoading = ref(false)
+const editingQuestionnaireId = ref(null)
+const editForm = reactive({
+  title: '',
+  description: ''
+})
 
 // Filtros
 const filters = reactive({
@@ -311,20 +377,115 @@ const manageQuestions = (id) => {
 }
 
 const editQuestionnaire = (id) => {
-  alert(`Editing questionnaire ${id} - functionality coming soon`)
+  const questionnaire = questionnaires.value.find(q => q.id === id)
+  if (questionnaire) {
+    editingQuestionnaireId.value = id
+    editForm.title = questionnaire.title
+    editForm.description = questionnaire.description || ''
+    showEditModal.value = true
+  }
+}
+
+const closeEditModal = () => {
+  showEditModal.value = false
+  editingQuestionnaireId.value = null
+  editForm.title = ''
+  editForm.description = ''
+}
+
+const saveQuestionnaire = async () => {
+  if (!editForm.title.trim()) return
+  
+  try {
+    editLoading.value = true
+    
+    const updateData = {
+      title: editForm.title.trim(),
+      description: editForm.description.trim()
+    }
+    
+    await questionnaireAPI.updateQuestionnaire(editingQuestionnaireId.value, updateData)
+    
+    // Actualizar cuestionario en la lista local
+    const questionnaire = questionnaires.value.find(q => q.id === editingQuestionnaireId.value)
+    if (questionnaire) {
+      questionnaire.title = updateData.title
+      questionnaire.description = updateData.description
+    }
+    
+    closeEditModal()
+    alert('Questionnaire updated successfully!')
+  } catch (error) {
+    console.error('Error updating questionnaire:', error)
+    alert(error.response?.data?.error || 'Failed to update questionnaire')
+  } finally {
+    editLoading.value = false
+  }
+}
+
+const publishQuestionnaire = async (id) => {
+  if (confirm('Are you sure you want to publish this questionnaire? Once published, it cannot be edited.')) {
+    try {
+      loading.value = true
+      await questionnaireAPI.publishQuestionnaire(id)
+      // Actualizar el estado local
+      const questionnaire = questionnaires.value.find(q => q.id === id)
+      if (questionnaire) {
+        questionnaire.is_published = true
+      }
+      alert('Questionnaire published successfully!')
+    } catch (error) {
+      console.error('Error publishing questionnaire:', error)
+      alert(error.response?.data?.error || 'Failed to publish questionnaire')
+    } finally {
+      loading.value = false
+    }
+  }
 }
 
 const viewResponses = (id) => {
-  alert(`Viewing responses for questionnaire ${id} - functionality coming soon`)
+  router.push(`/questionnaire/${id}/responses`)
 }
 
 const shareQuestionnaire = (id) => {
-  alert(`Sharing questionnaire ${id} - functionality coming soon`)
+  const questionnaire = questionnaires.value.find(q => q.id === id)
+  if (!questionnaire) return
+  
+  if (!questionnaire.is_published) {
+    alert('Please publish the questionnaire before sharing it.')
+    return
+  }
+  
+  // Generate share URL (would be actual domain in production)
+  const shareUrl = `${window.location.origin}/survey/${id}`
+  
+  // Copy to clipboard
+  navigator.clipboard.writeText(shareUrl).then(() => {
+    alert(`Share URL copied to clipboard:\n${shareUrl}`)
+  }).catch(() => {
+    // Fallback: show URL in prompt
+    prompt('Copy this URL to share your questionnaire:', shareUrl)
+  })
 }
 
-const deleteQuestionnaire = (id) => {
-  if (confirm('Are you sure you want to delete this questionnaire? This action cannot be undone.')) {
-    questionnaires.value = questionnaires.value.filter(q => q.id !== id)
+const deleteQuestionnaire = async (id) => {
+  const questionnaire = questionnaires.value.find(q => q.id === id)
+  const message = questionnaire?.is_published 
+    ? 'This questionnaire is published. Deleting it will also delete all responses. This action cannot be undone.'
+    : 'Are you sure you want to delete this questionnaire? This action cannot be undone.'
+    
+  if (confirm(message)) {
+    try {
+      loading.value = true
+      await questionnaireAPI.deleteQuestionnaire(id)
+      questionnaires.value = questionnaires.value.filter(q => q.id !== id)
+      alert('Questionnaire deleted successfully!')
+    } catch (error) {
+      console.error('Error deleting questionnaire:', error)
+      alert(error.response?.data?.error || 'Failed to delete questionnaire')
+    } finally {
+      loading.value = false
+    }
   }
 }
 
@@ -505,6 +666,18 @@ onMounted(() => {
   margin-bottom: 1rem;
 }
 
+.published-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background-color: #27ae60;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.8em;
+  font-weight: 500;
+}
+
 .card-header h3 {
   color: #111827;
   margin: 0;
@@ -665,6 +838,15 @@ onMounted(() => {
   color: #4338ca;
 }
 
+.action-link.publish {
+  color: #059669;
+}
+
+.action-link.publish:hover {
+  color: #047857;
+  background: #f0fdf4;
+}
+
 .action-link.danger,
 .action-btn.danger {
   color: #dc2626;
@@ -699,5 +881,130 @@ onMounted(() => {
 
 .clear-btn:hover {
   background: #e5e7eb;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: #111827;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 4px;
+}
+
+.close-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.modal-body {
+  padding: 1.5rem;
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+.form-group input,
+.form-group textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 0.875rem;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.modal-footer {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  padding-top: 1rem;
+  border-top: 1px solid #f3f4f6;
+}
+
+.cancel-btn {
+  padding: 0.75rem 1.5rem;
+  border: 1px solid #d1d5db;
+  background: white;
+  color: #374151;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.cancel-btn:hover {
+  background: #f9fafb;
+}
+
+.save-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: #4f46e5;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.save-btn:hover:not(:disabled) {
+  background: #4338ca;
+}
+
+.save-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 </style>

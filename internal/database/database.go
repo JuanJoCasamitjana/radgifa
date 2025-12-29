@@ -47,6 +47,11 @@ type Service interface {
 	GetMemberWithQuestionnaire(memberID uuid.UUID, ctx context.Context) (*ent.Member, error)
 	IsMemberIdentifierAvailable(questionnaireID uuid.UUID, uniqueIdentifier string, ctx context.Context) (bool, error)
 	CreateNewQuestion(questionnaireID uuid.UUID, text, theme string, ctx context.Context) (*ent.Question, error)
+	UpdateQuestionnaire(questionnaireID uuid.UUID, title, description string, ctx context.Context) (*ent.Questionnaire, error)
+	PublishQuestionnaire(questionnaireID uuid.UUID, ctx context.Context) (*ent.Questionnaire, error)
+	DeleteQuestionnaire(questionnaireID uuid.UUID, ctx context.Context) error
+	UpdateQuestion(questionID uuid.UUID, text, theme string, ctx context.Context) (*ent.Question, error)
+	DeleteQuestion(questionID uuid.UUID, ctx context.Context) error
 	GetQuestionWithQuestionnaire(questionID uuid.UUID, ctx context.Context) (*ent.Question, error)
 	GetMemberByUserAndQuestionnaire(userID, questionnaireID uuid.UUID, ctx context.Context) (*ent.Member, error)
 	CreateAnswer(memberID, questionID uuid.UUID, answerValue string, ctx context.Context) (*ent.Answer, error)
@@ -319,6 +324,122 @@ func (s *service) CreateNewQuestion(questionnaireID uuid.UUID, text, theme strin
 		return nil, err
 	}
 	return question, nil
+}
+
+func (s *service) UpdateQuestionnaire(questionnaireID uuid.UUID, title, description string, ctx context.Context) (*ent.Questionnaire, error) {
+	questionnaire, err := s.client.Questionnaire.UpdateOneID(questionnaireID).
+		SetTitle(title).
+		SetDescription(description).
+		Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return questionnaire, nil
+}
+
+func (s *service) PublishQuestionnaire(questionnaireID uuid.UUID, ctx context.Context) (*ent.Questionnaire, error) {
+	questionnaire, err := s.client.Questionnaire.UpdateOneID(questionnaireID).
+		SetIsPublished(true).
+		Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return questionnaire, nil
+}
+
+func (s *service) DeleteQuestionnaire(questionnaireID uuid.UUID, ctx context.Context) error {
+	// Start a transaction to ensure atomicity
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if v := recover(); v != nil {
+			tx.Rollback()
+			panic(v)
+		}
+	}()
+
+	// Delete all answers related to this questionnaire
+	_, err = tx.Answer.Delete().
+		Where(answer.HasQuestionWith(question.HasQuestionnaireWith(questionnaire.ID(questionnaireID)))).
+		Exec(ctx)
+	if err != nil {
+		return rollback(tx, err)
+	}
+
+	// Delete all questions
+	_, err = tx.Question.Delete().
+		Where(question.HasQuestionnaireWith(questionnaire.ID(questionnaireID))).
+		Exec(ctx)
+	if err != nil {
+		return rollback(tx, err)
+	}
+
+	// Delete all members
+	_, err = tx.Member.Delete().
+		Where(member.HasQuestionnaireWith(questionnaire.ID(questionnaireID))).
+		Exec(ctx)
+	if err != nil {
+		return rollback(tx, err)
+	}
+
+	// Delete the questionnaire
+	err = tx.Questionnaire.DeleteOneID(questionnaireID).Exec(ctx)
+	if err != nil {
+		return rollback(tx, err)
+	}
+
+	return tx.Commit()
+}
+
+func (s *service) UpdateQuestion(questionID uuid.UUID, text, theme string, ctx context.Context) (*ent.Question, error) {
+	question, err := s.client.Question.UpdateOneID(questionID).
+		SetText(text).
+		SetTheme(theme).
+		Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return question, nil
+}
+
+func (s *service) DeleteQuestion(questionID uuid.UUID, ctx context.Context) error {
+	// Start a transaction to ensure atomicity
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if v := recover(); v != nil {
+			tx.Rollback()
+			panic(v)
+		}
+	}()
+
+	// Delete all answers for this question
+	_, err = tx.Answer.Delete().
+		Where(answer.HasQuestionWith(question.ID(questionID))).
+		Exec(ctx)
+	if err != nil {
+		return rollback(tx, err)
+	}
+
+	// Delete the question
+	err = tx.Question.DeleteOneID(questionID).Exec(ctx)
+	if err != nil {
+		return rollback(tx, err)
+	}
+
+	return tx.Commit()
+}
+
+// Helper function for transaction rollback
+func rollback(tx *ent.Tx, err error) error {
+	if rerr := tx.Rollback(); rerr != nil {
+		err = fmt.Errorf("%w: rolling back transaction: %v", err, rerr)
+	}
+	return err
 }
 
 func (s *service) GetQuestionWithQuestionnaire(questionID uuid.UUID, ctx context.Context) (*ent.Question, error) {

@@ -92,6 +92,59 @@
       </div>
     </div>
 
+    <!-- Edit Question Form -->
+    <div v-if="showEditQuestionForm" class="add-question-form">
+      <div class="form-overlay" @click="cancelEditQuestion"></div>
+      <div class="form-content">
+        <div class="form-header">
+          <h3>Edit Question</h3>
+          <button @click="cancelEditQuestion" class="close-btn">
+            <Icon name="x" />
+          </button>
+        </div>
+        
+        <form @submit.prevent="submitEditQuestion" class="question-form">
+          <div class="form-group">
+            <label for="edit-question-text">Question Text *</label>
+            <textarea
+              id="edit-question-text"
+              v-model="editQuestion.text"
+              class="question-input"
+              :class="{ error: errors.text }"
+              placeholder="Enter your question here..."
+              rows="3"
+              required
+            ></textarea>
+            <span v-if="errors.text" class="error-message">{{ errors.text }}</span>
+          </div>
+          
+          <div class="form-group">
+            <label for="edit-question-theme">Theme (Optional)</label>
+            <input
+              id="edit-question-theme"
+              v-model="editQuestion.theme"
+              type="text"
+              class="theme-input"
+              :class="{ error: errors.theme }"
+              placeholder="e.g., Demographics, Satisfaction, etc."
+            />
+            <span v-if="errors.theme" class="error-message">{{ errors.theme }}</span>
+            <small class="help-text">Themes help organize questions by category</small>
+          </div>
+          
+          <div class="form-actions">
+            <button type="button" @click="cancelEditQuestion" class="btn-secondary">
+              Cancel
+            </button>
+            <button type="submit" :disabled="editSubmitting" class="btn-primary">
+              <Icon v-if="editSubmitting" name="loading" />
+              {{ editSubmitting ? 'Saving...' : 'Save Changes' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- Questions List -->
     <div v-else-if="!loading" class="questions-container">
       <!-- Empty State -->
@@ -140,11 +193,19 @@
             </div>
             
             <div class="question-actions">
-              <button @click="editQuestion(question)" class="action-btn small">
+              <button 
+                @click="editQuestionHandler(question)" 
+                :disabled="questionnaire?.is_published"
+                class="action-btn small"
+              >
                 <Icon name="edit" />
                 Edit
               </button>
-              <button @click="deleteQuestion(question.id)" class="action-btn small danger">
+              <button 
+                @click="deleteQuestionHandler(question.id)" 
+                :disabled="questionnaire?.is_published"
+                class="action-btn small danger"
+              >
                 <Icon name="trash" />
                 Delete
               </button>
@@ -297,15 +358,87 @@ const cancelAddQuestion = () => {
   showAddQuestionForm.value = false
 }
 
-// Edit question (placeholder)
-const editQuestion = (question) => {
-  alert(`Editing question "${question.text}" - functionality coming soon`)
+// Edit question
+const editQuestionHandler = (question) => {
+  if (questionnaire.value?.is_published) {
+    alert('Cannot edit questions in published questionnaires')
+    return
+  }
+  
+  editingQuestion.value = question
+  editQuestion.text = question.text
+  editQuestion.theme = question.theme || ''
+  showEditQuestionForm.value = true
 }
 
-// Delete question (placeholder)
-const deleteQuestion = (questionId) => {
-  if (confirm('Are you sure you want to delete this question? This action cannot be undone.')) {
-    alert(`Deleting question ${questionId} - functionality coming soon`)
+// Cancel edit question
+const cancelEditQuestion = () => {
+  showEditQuestionForm.value = false
+  editingQuestion.value = null
+  editQuestion.text = ''
+  editQuestion.theme = ''
+}
+
+// Submit edit question
+const submitEditQuestion = async () => {
+  if (!editQuestion.text.trim()) {
+    alert('Question text is required')
+    return
+  }
+  
+  try {
+    editSubmitting.value = true
+    
+    const updateData = {
+      text: editQuestion.text.trim(),
+      theme: editQuestion.theme.trim() || null
+    }
+    
+    await questionnaireAPI.updateQuestion(questionnaireId, editingQuestion.value.id, updateData)
+    
+    // Update question in local list
+    const questionIndex = questions.value.findIndex(q => q.id === editingQuestion.value.id)
+    if (questionIndex !== -1) {
+      questions.value[questionIndex] = {
+        ...questions.value[questionIndex],
+        ...updateData
+      }
+    }
+    
+    cancelEditQuestion()
+    showSuccess('Question updated successfully!')
+  } catch (error) {
+    console.error('Error updating question:', error)
+    showError(error.response?.data?.error || 'Failed to update question')
+  } finally {
+    editSubmitting.value = false
+  }
+}
+
+// Delete question
+const deleteQuestionHandler = async (questionId) => {
+  if (questionnaire.value?.is_published) {
+    alert('Cannot delete questions from published questionnaires')
+    return
+  }
+  
+  const question = questions.value.find(q => q.id === questionId)
+  if (!question) return
+  
+  const confirmMessage = `Are you sure you want to delete the question "${question.text}"? This action cannot be undone.`
+  
+  if (confirm(confirmMessage)) {
+    try {
+      await questionnaireAPI.deleteQuestion(questionnaireId, questionId)
+      
+      // Remove question from local list
+      questions.value = questions.value.filter(q => q.id !== questionId)
+      
+      showSuccess('Question deleted successfully!')
+    } catch (error) {
+      console.error('Error deleting question:', error)
+      showError(error.response?.data?.error || 'Failed to delete question')
+    }
   }
 }
 
@@ -783,6 +916,12 @@ onMounted(() => {
 
 .action-btn.small.danger:hover {
   background: #fee2e2;
+}
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 /* Toast Messages */
