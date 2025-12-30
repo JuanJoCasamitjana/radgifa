@@ -238,7 +238,7 @@ import Icon from '../components/Icon.vue'
 const route = useRoute()
 const router = useRouter()
 
-// State
+
 const loading = ref(false)
 const submitting = ref(false)
 const questionnaire = ref(null)
@@ -247,7 +247,7 @@ const showAddQuestionForm = ref(false)
 const successMessage = ref('')
 const errorMessage = ref('')
 
-// Form data
+
 const newQuestion = reactive({
   text: '',
   theme: ''
@@ -258,18 +258,18 @@ const errors = reactive({
   theme: ''
 })
 
-// Get questionnaire ID from route
+
 const questionnaireId = route.params.id
 
-// Load questionnaire details and questions
+
 const loadData = async () => {
   loading.value = true
   try {
-    // Load questionnaire details
+    
     const questionnaireResponse = await questionnaireAPI.getDetails(questionnaireId)
     questionnaire.value = questionnaireResponse.data
     
-    // Load questions
+    
     const questionsResponse = await questionnaireAPI.getQuestions(questionnaireId)
     questions.value = questionsResponse.data || []
   } catch (error) {
@@ -280,17 +280,17 @@ const loadData = async () => {
   }
 }
 
-// Refresh data
+
 const refreshData = () => {
   loadData()
 }
 
-// Go back to questionnaires list
+
 const goBack = () => {
   router.push('/questionnaires')
 }
 
-// Validate question form
+
 const validateQuestion = () => {
   errors.text = ''
   errors.theme = ''
@@ -313,7 +313,7 @@ const validateQuestion = () => {
   return true
 }
 
-// Submit new question
+
 const submitQuestion = async () => {
   if (!validateQuestion()) {
     return
@@ -328,12 +328,12 @@ const submitQuestion = async () => {
     
     await questionnaireAPI.createQuestion(questionnaireId, questionData)
     
-    // Reset form
+    
     newQuestion.text = ''
     newQuestion.theme = ''
     showAddQuestionForm.value = false
     
-    // Reload questions
+    
     await loadData()
     
     showSuccess('Question added successfully!')
@@ -349,7 +349,7 @@ const submitQuestion = async () => {
   }
 }
 
-// Cancel adding question
+
 const cancelAddQuestion = () => {
   newQuestion.text = ''
   newQuestion.theme = ''
@@ -358,7 +358,7 @@ const cancelAddQuestion = () => {
   showAddQuestionForm.value = false
 }
 
-// Edit question
+
 const editQuestionHandler = (question) => {
   if (questionnaire.value?.is_published) {
     alert('Cannot edit questions in published questionnaires')
@@ -371,7 +371,7 @@ const editQuestionHandler = (question) => {
   showEditQuestionForm.value = true
 }
 
-// Cancel edit question
+
 const cancelEditQuestion = () => {
   showEditQuestionForm.value = false
   editingQuestion.value = null
@@ -379,7 +379,7 @@ const cancelEditQuestion = () => {
   editQuestion.theme = ''
 }
 
-// Submit edit question
+
 const submitEditQuestion = async () => {
   if (!editQuestion.text.trim()) {
     alert('Question text is required')
@@ -396,7 +396,7 @@ const submitEditQuestion = async () => {
     
     await questionnaireAPI.updateQuestion(questionnaireId, editingQuestion.value.id, updateData)
     
-    // Update question in local list
+    
     const questionIndex = questions.value.findIndex(q => q.id === editingQuestion.value.id)
     if (questionIndex !== -1) {
       questions.value[questionIndex] = {
@@ -415,7 +415,7 @@ const submitEditQuestion = async () => {
   }
 }
 
-// Delete question
+
 const deleteQuestionHandler = async (questionId) => {
   if (questionnaire.value?.is_published) {
     alert('Cannot delete questions from published questionnaires')
@@ -431,7 +431,7 @@ const deleteQuestionHandler = async (questionId) => {
     try {
       await questionnaireAPI.deleteQuestion(questionnaireId, questionId)
       
-      // Remove question from local list
+      
       questions.value = questions.value.filter(q => q.id !== questionId)
       
       showSuccess('Question deleted successfully!')
@@ -442,7 +442,7 @@ const deleteQuestionHandler = async (questionId) => {
   }
 }
 
-// Format date
+
 const formatDate = (date) => {
   if (!date) return 'No date'
   
@@ -460,7 +460,7 @@ const formatDate = (date) => {
   }).format(dateObj)
 }
 
-// Show success message
+
 const showSuccess = (message) => {
   successMessage.value = message
   setTimeout(() => {
@@ -468,7 +468,7 @@ const showSuccess = (message) => {
   }, 3000)
 }
 
-// Show error message
+
 const showError = (message) => {
   errorMessage.value = message
   setTimeout(() => {
@@ -476,7 +476,7 @@ const showError = (message) => {
   }, 5000)
 }
 
-// Load data on mount
+
 onMounted(() => {
   loadData()
 })

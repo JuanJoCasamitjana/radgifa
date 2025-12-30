@@ -178,21 +178,21 @@ import Icon from '../components/Icon.vue'
 const router = useRouter()
 const route = useRoute()
 
-// Estado
+
 const loading = ref(false)
 const questionnaire = ref(null)
 const questions = ref([])
 const responses = ref([])
 const searchQuery = ref('')
 
-// Messages
+
 const successMessage = ref('')
 const errorMessage = ref('')
 
-// Get questionnaire ID from route
+
 const questionnaireId = route.params.id
 
-// Computed
+
 const filteredResponses = computed(() => {
   if (!searchQuery.value) return responses.value
   
@@ -203,20 +203,20 @@ const filteredResponses = computed(() => {
   )
 })
 
-// Load data
+
 const loadData = async () => {
   loading.value = true
   try {
-    // Load questionnaire details
+    
     const questionnaireResponse = await questionnaireAPI.getDetails(questionnaireId)
     questionnaire.value = questionnaireResponse.data
     
-    // Load questions
+    
     const questionsResponse = await questionnaireAPI.getQuestions(questionnaireId)
     questions.value = questionsResponse.data || []
     
-    // TODO: Load responses when API is available
-    // For now, using mock data
+    
+    
     responses.value = generateMockResponses()
   } catch (error) {
     console.error('Error loading data:', error)
@@ -226,7 +226,7 @@ const loadData = async () => {
   }
 }
 
-// Mock data generator (remove when real API is available)
+
 const generateMockResponses = () => {
   if (!questionnaire.value?.is_published) return []
   
@@ -240,14 +240,14 @@ const generateMockResponses = () => {
       respondent_name: names[i],
       respondent_email: emails[i],
       submitted_at: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString(),
-      completion_percentage: Math.floor(Math.random() * 40) + 60 // 60-100%
+      completion_percentage: Math.floor(Math.random() * 40) + 60 
     })
   }
   
   return mockResponses
 }
 
-// Actions
+
 const refreshData = () => {
   loadData()
 }
@@ -278,7 +278,7 @@ const viewResponse = (response) => {
 const deleteResponse = async (responseId) => {
   if (confirm('Are you sure you want to delete this response? This action cannot be undone.')) {
     try {
-      // TODO: Implement delete response API call
+      
       responses.value = responses.value.filter(r => r.id !== responseId)
       showSuccess('Response deleted successfully!')
     } catch (error) {
@@ -288,7 +288,7 @@ const deleteResponse = async (responseId) => {
   }
 }
 
-// Utility functions
+
 const formatDate = (date) => {
   if (!date) return 'No date'
   return new Intl.DateTimeFormat('en-US', {
@@ -309,7 +309,7 @@ const formatDateTime = (date) => {
   }).format(new Date(date))
 }
 
-// Show messages
+
 const showSuccess = (message) => {
   successMessage.value = message
   setTimeout(() => {
@@ -324,7 +324,7 @@ const showError = (message) => {
   }, 5000)
 }
 
-// Load data on mount
+
 onMounted(() => {
   loadData()
 })

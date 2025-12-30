@@ -4,7 +4,6 @@ import { onMounted } from 'vue'
 import Navbar from './components/Navbar.vue'
 import { actions } from './store/auth'
 
-// Initialize authentication on app start
 onMounted(() => {
   actions.initializeAuth()
 })
@@ -14,14 +13,12 @@ onMounted(() => {
   <div id="app">
     <Navbar />
     <main class="main-content">
-      <!-- Aquí se renderizan todas las vistas del router -->
       <RouterView />
     </main>
   </div>
 </template>
 
 <style>
-/* Estilos globales de la aplicación */
 #app {
   min-height: 100vh;
   display: flex;

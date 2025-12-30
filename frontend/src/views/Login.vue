@@ -82,13 +82,11 @@ import Icon from '../components/Icon.vue'
 
 const router = useRouter()
 
-// Estado del formulario
 const form = reactive({
   username: '',
   password: ''
 })
 
-// Estado de errores
 const errors = reactive({
   username: '',
   password: '',
@@ -98,19 +96,16 @@ const errors = reactive({
 const loading = ref(false)
 const showPassword = ref(false)
 
-// Toggle para mostrar/ocultar contraseña
 const togglePassword = () => {
   showPassword.value = !showPassword.value
 }
 
-// Limpiar errores cuando el usuario escribe
 const clearErrors = () => {
   errors.username = ''
   errors.password = ''
   errors.general = ''
 }
 
-// Validar formulario
 const validateForm = () => {
   clearErrors()
   let isValid = true
@@ -131,7 +126,6 @@ const validateForm = () => {
   return isValid
 }
 
-// Manejar login
 const handleLogin = async () => {
   if (!validateForm()) return
 
@@ -144,24 +138,20 @@ const handleLogin = async () => {
       password: form.password
     })
 
-    // Extraer token de la respuesta
-    const token = response.data.token
+        const token = response.data.token
 
     if (!token) {
       errors.general = 'Invalid response from server'
       return
     }
 
-    // Guardar en store (usuario básico basado en username)
     const user = {
       username: form.username.toLowerCase().trim(),
-      // Otros datos del usuario se pueden obtener de otro endpoint si es necesario
-    }
+          }
 
     actions.login(user, token)
 
-    // Redirigir al dashboard
-    router.push('/dashboard')
+        router.push('/dashboard')
 
   } catch (error) {
     console.error('Login error:', error)
@@ -178,7 +168,6 @@ const handleLogin = async () => {
   }
 }
 
-// Limpiar errores al escribir
 const onInput = () => {
   if (errors.general) {
     clearErrors()

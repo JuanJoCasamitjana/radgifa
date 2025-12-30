@@ -152,7 +152,6 @@
           <div 
             v-if="questionnaire && questionnaire.title"
             class="list-item"
-            @click="openQuestionnaire(questionnaire.id)"
           >
           <div class="col-title">
             <div class="item-title">{{ questionnaire.title }}</div>
@@ -180,8 +179,7 @@
         </div>
         </template>
       </div>
-
-      <!-- No Results -->
+      
       <div v-if="filteredQuestionnaires.length === 0 && questionnaires.length > 0" class="no-results">
         <Icon name="x" />
         <h3>No questionnaires match your filters</h3>
@@ -191,7 +189,6 @@
     </div>
   </div>
 
-  <!-- Modal de Edición de Cuestionario -->
   <div v-if="showEditModal" class="modal-overlay" @click="closeEditModal">
     <div class="modal-content" @click.stop>
       <div class="modal-header">
@@ -247,13 +244,12 @@ import Icon from '../components/Icon.vue'
 
 const router = useRouter()
 
-// Estado
+
 const loading = ref(false)
 const questionnaires = ref([])
 const viewMode = ref('grid')
 const sortBy = ref('created_desc')
 
-// Modal de edición
 const showEditModal = ref(false)
 const editLoading = ref(false)
 const editingQuestionnaireId = ref(null)
@@ -262,12 +258,12 @@ const editForm = reactive({
   description: ''
 })
 
-// Filtros
+
 const filters = reactive({
   search: ''
 })
 
-// Cuestionarios filtrados
+
 const filteredQuestionnaires = computed(() => {
   let filtered = questionnaires.value
 
@@ -282,7 +278,7 @@ const filteredQuestionnaires = computed(() => {
   return filtered
 })
 
-// Cuestionarios ordenados
+
 const sortedQuestionnaires = computed(() => {
   const sorted = [...filteredQuestionnaires.value]
 
@@ -302,47 +298,47 @@ const sortedQuestionnaires = computed(() => {
   }
 })
 
-// Cargar datos
+
 const loadData = async () => {
   loading.value = true
   try {
-    // Load real questionnaires from API
+    
     const response = await questionnaireAPI.getMyQuestionnaires()
     console.log('API Response:', response)
     console.log('API Data:', response.data)
     
-    // Clean up and normalize the data
+    
     const cleanedData = (response.data || []).map(q => ({
       ...q,
-      // Remove extra quotes from strings
+      
       title: (q.title || '').replace(/^"|"$/g, ''),
       description: (q.description || '').replace(/^"|"$/g, ''),
-      // Add missing properties with defaults
+      
       responseCount: q.responseCount || q.responses || 0,
       createdAt: q.created_at || q.createdAt || q.date || Date.now()
     }))
     
     questionnaires.value = cleanedData
     
-    // Log first questionnaire structure for debugging
+    
     if (questionnaires.value.length > 0) {
       console.log('First cleaned questionnaire:', questionnaires.value[0])
     }
   } catch (error) {
     console.error('Error loading questionnaires:', error)
-    // Initialize empty if API fails
+    
     questionnaires.value = []
   } finally {
     loading.value = false
   }
 }
 
-// Refrescar datos
+
 const refreshData = () => {
   loadData()
 }
 
-// Formatear fecha
+
 const formatDate = (date) => {
   if (!date) return 'No date'
   
@@ -358,18 +354,14 @@ const formatDate = (date) => {
   }).format(dateObj)
 }
 
-// Limpiar filtros
+
 const clearFilters = () => {
   filters.search = ''
 }
 
-// Acciones
+
 const createNew = () => {
   router.push('/questionnaire/create')
-}
-
-const openQuestionnaire = (id) => {
-  alert(`Opening questionnaire ${id} - functionality coming soon`)
 }
 
 const manageQuestions = (id) => {
@@ -406,7 +398,7 @@ const saveQuestionnaire = async () => {
     
     await questionnaireAPI.updateQuestionnaire(editingQuestionnaireId.value, updateData)
     
-    // Actualizar cuestionario en la lista local
+    
     const questionnaire = questionnaires.value.find(q => q.id === editingQuestionnaireId.value)
     if (questionnaire) {
       questionnaire.title = updateData.title
@@ -428,7 +420,7 @@ const publishQuestionnaire = async (id) => {
     try {
       loading.value = true
       await questionnaireAPI.publishQuestionnaire(id)
-      // Actualizar el estado local
+      
       const questionnaire = questionnaires.value.find(q => q.id === id)
       if (questionnaire) {
         questionnaire.is_published = true
@@ -456,14 +448,14 @@ const shareQuestionnaire = (id) => {
     return
   }
   
-  // Generate share URL (would be actual domain in production)
+  
   const shareUrl = `${window.location.origin}/survey/${id}`
   
-  // Copy to clipboard
+  
   navigator.clipboard.writeText(shareUrl).then(() => {
     alert(`Share URL copied to clipboard:\n${shareUrl}`)
   }).catch(() => {
-    // Fallback: show URL in prompt
+    
     prompt('Copy this URL to share your questionnaire:', shareUrl)
   })
 }
@@ -489,7 +481,7 @@ const deleteQuestionnaire = async (id) => {
   }
 }
 
-// Cargar datos al montar
+
 onMounted(() => {
   loadData()
 })
@@ -650,7 +642,6 @@ onMounted(() => {
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   padding: 1.5rem;
-  cursor: pointer;
   transition: all 0.2s;
 }
 
@@ -732,6 +723,7 @@ onMounted(() => {
   gap: 1rem;
   padding-top: 1rem;
   border-top: 1px solid #f3f4f6;
+  flex-wrap: wrap;
 }
 
 .questionnaires-list {
@@ -836,6 +828,7 @@ onMounted(() => {
 
 .action-link:hover {
   color: #4338ca;
+  background: #e3e1fd;
 }
 
 .action-link.publish {

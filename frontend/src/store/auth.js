@@ -1,20 +1,17 @@
 import { reactive, computed } from 'vue'
 
-// Estado global reactivo
 const state = reactive({
   user: JSON.parse(localStorage.getItem('user')) || null,
   token: localStorage.getItem('token') || null,
   loading: false
 })
 
-// Getters computados
 export const getters = {
   isAuthenticated: computed(() => !!state.token),
   currentUser: computed(() => state.user),
   isLoading: computed(() => state.loading)
 }
 
-// Actions para modificar el estado
 export const actions = {
   setUser(user) {
     state.user = user

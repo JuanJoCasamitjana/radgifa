@@ -71,20 +71,16 @@ const router = createRouter({
   routes
 })
 
-// Guard de navegación para rutas protegidas
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('token')
   const isAuthenticated = !!token
 
-  // Si la ruta requiere autenticación y no está autenticado
   if (to.meta.requiresAuth && !isAuthenticated) {
     next('/login')
   }
-  // Si está autenticado y va a login/register, redirigir al dashboard
   else if (isAuthenticated && (to.name === 'Login' || to.name === 'Register')) {
     next('/dashboard')
   }
-  // Permitir navegación normal
   else {
     next()
   }

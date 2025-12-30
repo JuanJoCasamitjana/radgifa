@@ -86,7 +86,6 @@
 </template>
 
 <script setup>
-// CreateQuestionnaire component - matches API requirements
 import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import Icon from '../components/Icon.vue'
@@ -94,22 +93,18 @@ import { questionnaireAPI } from '../services/api.js'
 
 const router = useRouter()
 
-// State
 const loading = ref(false)
 
-// Form data matching API requirements
 const form = reactive({
   title: '',
   description: ''
 })
 
-// Form errors
 const errors = reactive({
   title: '',
   description: ''
 })
 
-// Form validation
 const isFormValid = computed(() => {
   return form.title.trim().length > 0 && 
          form.title.length <= 200 &&

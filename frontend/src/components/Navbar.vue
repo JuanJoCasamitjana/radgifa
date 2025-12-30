@@ -1,17 +1,14 @@
 <template>
   <nav class="navbar">
     <div class="navbar-container">
-      <!-- Logo/Brand -->
       <div class="navbar-brand">
         <router-link to="/" class="brand-link">
           {{ appName }}
         </router-link>
       </div>
 
-      <!-- Navigation Links -->
       <div class="navbar-nav" :class="{ 'active': showMobileMenu }">
         <template v-if="isAuthenticated">
-          <!-- Authenticated User Menu -->
           <router-link to="/dashboard" class="nav-link">
             <Icon name="home" />
             <span>Dashboard</span>
@@ -48,13 +45,11 @@
         </template>
 
         <template v-else>
-          <!-- Guest Menu -->
           <router-link to="/login" class="nav-link">Sign In</router-link>
           <router-link to="/register" class="nav-link btn-primary">Get Started</router-link>
         </template>
       </div>
 
-      <!-- Mobile Menu Button -->
       <button 
         class="mobile-menu-button" 
         @click="toggleMobileMenu"
@@ -79,28 +74,28 @@ const showMobileMenu = ref(false)
 const showUserMenu = ref(false)
 const userMenuRef = ref(null)
 
-// Computed properties from store
+
 const isAuthenticated = getters.isAuthenticated
 const currentUser = getters.currentUser
 
-// Toggle mobile menu
+
 const toggleMobileMenu = () => {
   showMobileMenu.value = !showMobileMenu.value
 }
 
-// Toggle user menu
+
 const toggleUserMenu = () => {
   showUserMenu.value = !showUserMenu.value
 }
 
-// Handle logout
+
 const handleLogout = () => {
   actions.logout()
   showUserMenu.value = false
   router.push('/')
 }
 
-// Close menus when clicking outside
+
 const handleClickOutside = (event) => {
   if (userMenuRef.value && !userMenuRef.value.contains(event.target)) {
     showUserMenu.value = false

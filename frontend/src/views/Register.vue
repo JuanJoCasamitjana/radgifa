@@ -179,7 +179,7 @@ import Icon from '../components/Icon.vue'
 
 const router = useRouter()
 
-// Estado del formulario
+
 const form = reactive({
   name: '',
   display_name: '',
@@ -188,7 +188,7 @@ const form = reactive({
   confirm_password: ''
 })
 
-// Estado de errores
+
 const errors = reactive({
   name: '',
   display_name: '',
@@ -204,7 +204,6 @@ const usernameAvailable = ref(null)
 const showPassword = ref(false)
 const showConfirmPassword = ref(false)
 
-// Toggle para mostrar/ocultar contraseñas
 const togglePassword = () => {
   showPassword.value = !showPassword.value
 }
@@ -213,7 +212,6 @@ const toggleConfirmPassword = () => {
   showConfirmPassword.value = !showConfirmPassword.value
 }
 
-// Validación específica de contraseña
 const passwordChecks = computed(() => {
   const password = form.password
   return {
@@ -225,13 +223,11 @@ const passwordChecks = computed(() => {
   }
 })
 
-// Verificar si la contraseña cumple todos los requisitos
 const isPasswordValid = computed(() => {
   const checks = passwordChecks.value
   return checks.length && checks.hasUpper && checks.hasLower && checks.hasNumber && checks.hasSpecial
 })
 
-// Validación de fortaleza de contraseña
 const passwordStrength = computed(() => {
   const password = form.password
   if (!password) return { width: '0%', class: '', text: '' }
@@ -266,7 +262,6 @@ const passwordStrength = computed(() => {
   return strength[score] || strength[0]
 })
 
-// Validar si el formulario es válido
 const isFormValid = computed(() => {
   return form.name.trim() && 
          form.username.trim().length >= 3 && 
@@ -275,12 +270,12 @@ const isFormValid = computed(() => {
          usernameAvailable.value === true
 })
 
-// Limpiar errores
+
 const clearErrors = () => {
   Object.keys(errors).forEach(key => errors[key] = '')
 }
 
-// Verificar disponibilidad del username
+
 const checkUsernameAvailability = async () => {
   const username = form.username.trim().toLowerCase()
   
@@ -306,12 +301,12 @@ const checkUsernameAvailability = async () => {
   }
 }
 
-// Validar formulario completo
+
 const validateForm = () => {
   clearErrors()
   let isValid = true
 
-  // Validar nombre
+  
   if (!form.name.trim()) {
     errors.name = 'Full name is required'
     isValid = false
@@ -320,7 +315,7 @@ const validateForm = () => {
     isValid = false
   }
 
-  // Validar username
+  
   if (!form.username.trim()) {
     errors.username = 'Username is required'
     isValid = false
@@ -335,7 +330,6 @@ const validateForm = () => {
     isValid = false
   }
 
-  // Validar contraseña
   if (!form.password) {
     errors.password = 'Password is required'
     isValid = false
@@ -344,7 +338,6 @@ const validateForm = () => {
     isValid = false
   }
 
-  // Validar confirmación de contraseña
   if (!form.confirm_password) {
     errors.confirm_password = 'Please confirm your password'
     isValid = false
@@ -356,7 +349,7 @@ const validateForm = () => {
   return isValid
 }
 
-// Manejar registro
+
 const handleRegister = async () => {
   if (!validateForm()) return
 
@@ -373,7 +366,6 @@ const handleRegister = async () => {
 
     const response = await authAPI.register(userData)
 
-    // Registro exitoso, ahora hacer login automático
     const loginResponse = await authAPI.login({
       username: userData.username,
       password: userData.password
@@ -404,7 +396,7 @@ const handleRegister = async () => {
   }
 }
 
-// Handlers de input
+
 const onInput = () => {
   if (errors.general) {
     clearErrors()
@@ -416,7 +408,7 @@ const onUsernameInput = () => {
   onInput()
 }
 
-// Watch para verificar username automáticamente
+áticamente
 let usernameTimeout
 watch(() => form.username, (newVal) => {
   if (usernameTimeout) clearTimeout(usernameTimeout)
