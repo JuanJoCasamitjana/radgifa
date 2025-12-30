@@ -1,0 +1,1098 @@
+<template>
+  <div class="questionnaires">
+    <div class="page-header">
+      <div class="header-content">
+        <h1>All Questionnaires</h1>
+        <p>Manage and view all your questionnaires</p>
+      </div>
+      
+      <div class="header-actions">
+        <button @click="createNew" class="action-btn primary">
+          <Icon name="plus" />
+          Create New
+        </button>
+        
+        <button @click="refreshData" class="action-btn secondary">
+          <Icon name="refresh" />
+          Refresh
+        </button>
+      </div>
+    </div>
+
+    <div class="filters-bar">
+      <div class="filter-group">
+        <label>Search:</label>
+        <input
+          v-model="filters.search"
+          type="text"
+          placeholder="Search by title..."
+          class="search-input"
+        />
+      </div>
+      
+      <div class="results-info">
+        <span>{{ filteredQuestionnaires.length }} questionnaire(s) found</span>
+      </div>
+    </div>
+
+    <div v-if="loading" class="loading-state">
+      <Icon name="loading" />
+      Loading questionnaires...
+    </div>
+
+    <div v-else-if="questionnaires.length === 0" class="empty-state">
+      <Icon name="plus" />
+      <h3>No questionnaires found</h3>
+      <p>You haven't created any questionnaires yet.</p>
+      <button @click="createNew" class="create-btn">
+        <Icon name="plus" />
+        Create Your First Questionnaire
+      </button>
+    </div>
+
+    <div v-else class="questionnaires-container">
+      <div class="view-controls">
+        <div class="view-toggle">
+          <button 
+            @click="viewMode = 'grid'"
+            :class="{ 'active': viewMode === 'grid' }"
+            class="toggle-btn"
+          >
+            Grid
+          </button>
+          <button 
+            @click="viewMode = 'list'"
+            :class="{ 'active': viewMode === 'list' }"
+            class="toggle-btn"
+          >
+            List
+          </button>
+        </div>
+        
+        <div class="sort-controls">
+          <label>Sort by:</label>
+          <select v-model="sortBy" class="sort-select">
+            <option value="created_desc">Newest First</option>
+            <option value="created_asc">Oldest First</option>
+            <option value="title_asc">Title A-Z</option>
+            <option value="title_desc">Title Z-A</option>
+            <option value="responses_desc">Most Responses</option>
+          </select>
+        </div>
+      </div>
+
+      <div v-if="viewMode === 'grid'" class="questionnaires-grid">
+        <template v-for="questionnaire in sortedQuestionnaires" :key="questionnaire.id">
+          <div 
+            v-if="questionnaire && questionnaire.title"
+            class="questionnaire-card"
+          >
+          <div class="card-header">
+            <h3>{{ questionnaire.title }}</h3>
+            <div v-if="questionnaire.is_published" class="published-badge">
+              <Icon name="check" />
+              Published
+            </div>
+          </div>
+          
+          <p class="card-description">{{ questionnaire.description || 'No description provided' }}</p>
+          
+          <div class="card-stats">
+            <div class="stat-item">
+              <Icon name="user" />
+              <span>{{ questionnaire.responseCount }} responses</span>
+            </div>
+            <div class="stat-item">
+              <Icon name="calendar" />
+              <span>{{ formatDate(questionnaire.createdAt) }}</span>
+            </div>
+          </div>
+          
+          <div class="card-actions">
+            <button @click.stop="manageQuestions(questionnaire.id)" class="action-link">
+              Questions
+            </button>
+            <button v-if="!questionnaire.is_published" @click.stop="editQuestionnaire(questionnaire.id)" class="action-link">
+              Edit
+            </button>
+            <button v-if="!questionnaire.is_published" @click.stop="publishQuestionnaire(questionnaire.id)" class="action-link publish">
+              Publish
+            </button>
+            <button @click.stop="shareQuestionnaire(questionnaire.id)" class="action-link">
+              Share
+            </button>
+            <button v-if="!questionnaire.is_published" @click.stop="deleteQuestionnaire(questionnaire.id)" class="action-link danger">
+              Delete
+            </button>
+          </div>
+        </div>
+        </template>
+      </div>
+
+      <div v-else class="questionnaires-list">
+        <div class="list-header">
+          <div class="col-title">Title</div>
+          <div class="col-responses">Responses</div>
+          <div class="col-created">Created</div>
+          <div class="col-actions">Actions</div>
+        </div>
+        
+        <template v-for="questionnaire in sortedQuestionnaires" :key="questionnaire.id">
+          <div 
+            v-if="questionnaire && questionnaire.title"
+            class="list-item"
+          >
+          <div class="col-title">
+            <div class="item-title">{{ questionnaire.title }}</div>
+            <div class="item-description">{{ questionnaire.description || 'No description' }}</div>
+          </div>
+          <div class="col-responses">{{ questionnaire.responseCount }}</div>
+          <div class="col-created">{{ formatDate(questionnaire.createdAt) }}</div>
+          <div class="col-actions">
+            <button @click.stop="manageQuestions(questionnaire.id)" class="action-btn small">
+              Questions
+            </button>
+            <button v-if="!questionnaire.is_published" @click.stop="editQuestionnaire(questionnaire.id)" class="action-btn small">
+              Edit
+            </button>
+            <button v-if="!questionnaire.is_published" @click.stop="publishQuestionnaire(questionnaire.id)" class="action-btn small publish">
+              Publish
+            </button>
+            <button @click.stop="shareQuestionnaire(questionnaire.id)" class="action-btn small">
+              Share
+            </button>
+            <button v-if="!questionnaire.is_published" @click.stop="deleteQuestionnaire(questionnaire.id)" class="action-btn small danger">
+              Delete
+            </button>
+          </div>
+        </div>
+        </template>
+      </div>
+      
+      <div v-if="filteredQuestionnaires.length === 0 && questionnaires.length > 0" class="no-results">
+        <Icon name="x" />
+        <h3>No questionnaires match your filters</h3>
+        <p>Try adjusting your search terms or filters.</p>
+        <button @click="clearFilters" class="clear-btn">Clear Filters</button>
+      </div>
+    </div>
+  </div>
+
+  <div v-if="showEditModal" class="modal-overlay" @click="closeEditModal">
+    <div class="modal-content" @click.stop>
+      <div class="modal-header">
+        <h2>Edit Questionnaire</h2>
+        <button @click="closeEditModal" class="close-btn">
+          <Icon name="x" />
+        </button>
+      </div>
+      
+      <form @submit.prevent="saveQuestionnaire" class="modal-body">
+        <div class="form-group">
+          <label for="edit-title">Title *</label>
+          <input
+            id="edit-title"
+            v-model="editForm.title"
+            type="text"
+            required
+            maxlength="200"
+            placeholder="Enter questionnaire title"
+          />
+        </div>
+        
+        <div class="form-group">
+          <label for="edit-description">Description</label>
+          <textarea
+            id="edit-description"
+            v-model="editForm.description"
+            rows="4"
+            maxlength="1000"
+            placeholder="Enter questionnaire description"
+          ></textarea>
+        </div>
+        
+        <div class="modal-footer">
+          <button type="button" @click="closeEditModal" class="cancel-btn">
+            Cancel
+          </button>
+          <button type="submit" :disabled="editLoading" class="save-btn">
+            <Icon v-if="editLoading" name="loading" />
+            {{ editLoading ? 'Saving...' : 'Save Changes' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <ConfirmModal
+    :show="confirmModal.show"
+    :title="confirmModal.title"
+    :message="confirmModal.message"
+    :confirm-text="confirmModal.confirmText"
+    :type="confirmModal.type"
+    :loading="confirmModal.loading"
+    @confirm="confirmModal.onConfirm"
+    @cancel="closeConfirmModal"
+  />
+
+  <QRModal
+    :show="qrModal.show"
+    :url="qrModal.url"
+    @close="qrModal.show = false"
+  />
+</template>
+
+<script setup>
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { questionnaireAPI } from '../services/api.js'
+import Icon from '../components/Icon.vue'
+import ConfirmModal from '../components/ConfirmModal.vue'
+import QRModal from '../components/QRModal.vue'
+
+const router = useRouter()
+
+
+const loading = ref(false)
+const questionnaires = ref([])
+const viewMode = ref('grid')
+const sortBy = ref('created_desc')
+
+const showEditModal = ref(false)
+const editLoading = ref(false)
+const editingQuestionnaireId = ref(null)
+const editForm = reactive({
+  title: '',
+  description: ''
+})
+
+const confirmModal = reactive({
+  show: false,
+  title: '',
+  message: '',
+  confirmText: 'Confirm',
+  type: 'warning',
+  loading: false,
+  onConfirm: () => {}
+})
+
+const qrModal = reactive({
+  show: false,
+  url: ''
+})
+
+const filters = reactive({
+  search: ''
+})
+
+
+const filteredQuestionnaires = computed(() => {
+  let filtered = questionnaires.value
+
+  if (filters.search) {
+    const search = filters.search.toLowerCase()
+    filtered = filtered.filter(q => 
+      q.title.toLowerCase().includes(search) ||
+      (q.description && q.description.toLowerCase().includes(search))
+    )
+  }
+
+  return filtered
+})
+
+
+const sortedQuestionnaires = computed(() => {
+  const sorted = [...filteredQuestionnaires.value]
+
+  switch (sortBy.value) {
+    case 'created_desc':
+      return sorted.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    case 'created_asc':
+      return sorted.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+    case 'title_asc':
+      return sorted.sort((a, b) => a.title.localeCompare(b.title))
+    case 'title_desc':
+      return sorted.sort((a, b) => b.title.localeCompare(a.title))
+    case 'responses_desc':
+      return sorted.sort((a, b) => (b.responseCount || 0) - (a.responseCount || 0))
+    default:
+      return sorted
+  }
+})
+
+
+const loadData = async () => {
+  loading.value = true
+  try {
+    
+    const response = await questionnaireAPI.getMyQuestionnaires()
+    console.log('API Response:', response)
+    console.log('API Data:', response.data)
+    
+    
+    const cleanedData = (response.data || []).map(q => ({
+      ...q,
+      
+      title: (q.title || '').replace(/^"|"$/g, ''),
+      description: (q.description || '').replace(/^"|"$/g, ''),
+      
+      responseCount: q.responseCount || q.responses || 0,
+      createdAt: q.created_at || q.createdAt || q.date || Date.now()
+    }))
+    
+    questionnaires.value = cleanedData
+    
+    
+    if (questionnaires.value.length > 0) {
+      console.log('First cleaned questionnaire:', questionnaires.value[0])
+    }
+  } catch (error) {
+    console.error('Error loading questionnaires:', error)
+    
+    questionnaires.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+
+const refreshData = () => {
+  loadData()
+}
+
+
+const formatDate = (date) => {
+  if (!date) return 'No date'
+  
+  const dateObj = new Date(date)
+  if (isNaN(dateObj.getTime())) {
+    return 'Invalid date'
+  }
+  
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  }).format(dateObj)
+}
+
+
+const clearFilters = () => {
+  filters.search = ''
+}
+
+
+const createNew = () => {
+  router.push('/questionnaire/create')
+}
+
+const manageQuestions = (id) => {
+  router.push(`/questionnaire/${id}/questions`)
+}
+
+const editQuestionnaire = (id) => {
+  const questionnaire = questionnaires.value.find(q => q.id === id)
+  if (questionnaire) {
+    editingQuestionnaireId.value = id
+    editForm.title = questionnaire.title
+    editForm.description = questionnaire.description || ''
+    showEditModal.value = true
+  }
+}
+
+const closeEditModal = () => {
+  showEditModal.value = false
+  editingQuestionnaireId.value = null
+  editForm.title = ''
+  editForm.description = ''
+}
+
+const saveQuestionnaire = async () => {
+  if (!editForm.title.trim()) return
+  
+  try {
+    editLoading.value = true
+    
+    const updateData = {
+      title: editForm.title.trim(),
+      description: editForm.description.trim()
+    }
+    
+    await questionnaireAPI.update(editingQuestionnaireId.value, updateData)
+    
+    
+    const questionnaire = questionnaires.value.find(q => q.id === editingQuestionnaireId.value)
+    if (questionnaire) {
+      questionnaire.title = updateData.title
+      questionnaire.description = updateData.description
+    }
+    
+    closeEditModal()
+    console.log('Questionnaire updated successfully!')
+  } catch (error) {
+    console.error('Error updating questionnaire:', error)
+  } finally {
+    editLoading.value = false
+  }
+}
+
+const publishQuestionnaire = (id) => {
+  confirmModal.show = true
+  confirmModal.title = 'Publish Questionnaire'
+  confirmModal.message = 'Are you sure you want to publish this questionnaire? Once published, it cannot be edited.'
+  confirmModal.confirmText = 'Publish'
+  confirmModal.type = 'warning'
+  confirmModal.onConfirm = () => executePublish(id)
+}
+
+const executePublish = async (id) => {
+  try {
+    confirmModal.loading = true
+    await questionnaireAPI.publish(id)
+    
+    const questionnaire = questionnaires.value.find(q => q.id === id)
+    if (questionnaire) {
+      questionnaire.is_published = true
+    }
+    
+    try {
+      const inviteResponse = await questionnaireAPI.generateInvite(id)
+      const inviteUrl = inviteResponse.data.join_url || inviteResponse.data.url || inviteResponse.data.invite_url
+      
+      if (inviteUrl) {
+        const fullUrl = inviteUrl.startsWith('http') ? inviteUrl : `${window.location.origin}${inviteUrl}`
+        
+        navigator.clipboard.writeText(fullUrl).then(() => {
+          console.log('Questionnaire published and invite URL copied to clipboard:', fullUrl)
+        }).catch(() => {
+          console.log('Questionnaire published. Invite URL:', fullUrl)
+          prompt('Questionnaire published! Copy this URL to invite participants:', fullUrl)
+        })
+      } else {
+        console.error('No invite URL received')
+        console.log('Response data:', inviteResponse.data)
+      }
+    } catch (inviteError) {
+      console.error('Failed to generate invite URL:', inviteError)
+    }
+    
+    console.log('Questionnaire published successfully!')
+    closeConfirmModal()
+  } catch (error) {
+    console.error('Error publishing questionnaire:', error)
+  } finally {
+    confirmModal.loading = false
+  }
+}
+
+const viewResponses = (id) => {
+  router.push(`/questionnaire/${id}/responses`)
+}
+
+const shareQuestionnaire = async (id) => {
+  const questionnaire = questionnaires.value.find(q => q.id === id)
+  if (!questionnaire) return
+  
+  if (!questionnaire.is_published) {
+    console.warn('Cannot share unpublished questionnaire')
+    return
+  }
+  
+  try {
+    const inviteResponse = await questionnaireAPI.generateInvite(id)
+    const shareUrl = inviteResponse.data.join_url || inviteResponse.data.url || inviteResponse.data.invite_url
+    
+    if (shareUrl) {
+      const fullUrl = shareUrl.startsWith('http') ? shareUrl : `${window.location.origin}${shareUrl}`
+      qrModal.url = fullUrl
+      qrModal.show = true
+    } else {
+      console.error('No URL received from invite generation')
+      console.log('Response data:', inviteResponse.data)
+    }
+  } catch (error) {
+    console.error('Error generating share URL:', error)
+  }
+}
+
+const deleteQuestionnaire = (id) => {
+  const questionnaire = questionnaires.value.find(q => q.id === id)
+  const message = questionnaire?.is_published 
+    ? 'This questionnaire is published. Deleting it will also delete all responses. This action cannot be undone.'
+    : 'Are you sure you want to delete this questionnaire? This action cannot be undone.'
+    
+  confirmModal.show = true
+  confirmModal.title = 'Delete Questionnaire'
+  confirmModal.message = message
+  confirmModal.confirmText = 'Delete'
+  confirmModal.type = 'danger'
+  confirmModal.onConfirm = () => executeDelete(id)
+}
+
+const executeDelete = async (id) => {
+  try {
+    confirmModal.loading = true
+      await questionnaireAPI.delete(id)
+      questionnaires.value = questionnaires.value.filter(q => q.id !== id)
+      console.log('Questionnaire deleted successfully!')
+      closeConfirmModal()
+    } catch (error) {
+      console.error('Error deleting questionnaire:', error)
+    } finally {
+      confirmModal.loading = false
+    }
+}
+
+
+const closeConfirmModal = () => {
+  confirmModal.show = false
+  confirmModal.loading = false
+}
+
+onMounted(() => {
+  loadData()
+})
+</script>
+
+<style scoped>
+.questionnaires {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.header-content h1 {
+  font-size: 2.5rem;
+  color: #111827;
+  margin: 0 0 0.5rem 0;
+}
+
+.header-content p {
+  color: #6b7280;
+  margin: 0;
+}
+
+.header-actions {
+  display: flex;
+  gap: 1rem;
+}
+
+.filters-bar {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-bottom: 2rem;
+  display: flex;
+  gap: 2rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.filter-group label {
+  font-weight: 500;
+  color: #374151;
+}
+
+.filter-select,
+.search-input {
+  padding: 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  min-width: 120px;
+}
+
+.search-input {
+  min-width: 200px;
+}
+
+.results-info {
+  margin-left: auto;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.loading-state,
+.empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: #6b7280;
+}
+
+.empty-state h3 {
+  color: #111827;
+  margin: 1rem 0 0.5rem 0;
+}
+
+.create-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 1rem auto 0 auto;
+  padding: 0.75rem 1.5rem;
+  background: #4f46e5;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.questionnaires-container {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.view-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.view-toggle {
+  display: flex;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.toggle-btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.toggle-btn.active {
+  background: #4f46e5;
+  color: white;
+}
+
+.sort-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sort-select {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+}
+
+.questionnaires-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 1.5rem;
+  padding: 1.5rem;
+}
+
+.questionnaire-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1.5rem;
+  transition: all 0.2s;
+}
+
+.questionnaire-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  margin-bottom: 1rem;
+}
+
+.published-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background-color: #27ae60;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.8em;
+  font-weight: 500;
+}
+
+.card-header h3 {
+  color: #111827;
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.status-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.status-badge.active {
+  background: #ecfdf5;
+  color: #065f46;
+}
+
+.status-badge.completed {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-badge.draft {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.card-description {
+  color: #6b7280;
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+
+.card-stats {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.card-actions {
+  display: flex;
+  gap: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #f3f4f6;
+  flex-wrap: wrap;
+}
+
+.questionnaires-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.list-header {
+  display: grid;
+  grid-template-columns: 2fr 100px 150px 2fr;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  background: #f9fafb;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.list-item {
+  display: grid;
+  grid-template-columns: 2fr 100px 150px 2fr;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #f3f4f6;
+  transition: background-color 0.2s;
+}
+
+.list-item:hover {
+  background: #f9fafb;
+}
+
+.col-title {
+  min-width: 0;
+}
+
+.col-responses,
+.col-created {
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+}
+
+.col-created {
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.list-header .col-responses,
+.list-header .col-created {
+  justify-content: center;
+}
+
+.item-title {
+  font-weight: 600;
+  color: #111827;
+}
+
+.item-description {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-top: 0.25rem;
+}
+
+.col-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  min-height: 40px;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  height: 36px;
+  box-sizing: border-box;
+}
+
+.action-btn.primary {
+  background: #4f46e5;
+  color: white;
+}
+
+.action-btn.primary:hover {
+  background: #4338ca;
+}
+
+.action-btn.secondary {
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.action-btn.secondary:hover {
+  background: #e5e7eb;
+}
+
+.action-btn.small {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  height: 32px;
+  border-radius: 4px;
+}
+
+.action-btn.small:hover {
+  background: #e5e7eb;
+}
+
+.action-link {
+  background: none;
+  border: none;
+  color: #4f46e5;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.action-link:hover {
+  color: #4338ca;
+  background: #e3e1fd;
+}
+
+.action-link.publish {
+  color: #059669;
+}
+
+.action-link.publish:hover {
+  color: #047857;
+  background: #f0fdf4;
+}
+
+.action-link.danger,
+.action-btn.danger {
+  color: #dc2626;
+}
+
+.action-link.danger:hover,
+.action-btn.danger:hover {
+  color: #b91c1c;
+  background: #fef2f2;
+}
+
+.no-results {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: #6b7280;
+}
+
+.no-results h3 {
+  color: #111827;
+  margin: 1rem 0 0.5rem 0;
+}
+
+.clear-btn {
+  margin-top: 1rem;
+  padding: 0.5rem 1rem;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.clear-btn:hover {
+  background: #e5e7eb;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: #111827;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 4px;
+}
+
+.close-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.modal-body {
+  padding: 1.5rem;
+}
+
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+.form-group input,
+.form-group textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 0.875rem;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.modal-footer {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  padding-top: 1rem;
+  border-top: 1px solid #f3f4f6;
+}
+
+.cancel-btn {
+  padding: 0.75rem 1.5rem;
+  border: 1px solid #d1d5db;
+  background: white;
+  color: #374151;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.cancel-btn:hover {
+  background: #f9fafb;
+}
+
+.save-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: #4f46e5;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.save-btn:hover:not(:disabled) {
+  background: #4338ca;
+}
+
+.save-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+</style>

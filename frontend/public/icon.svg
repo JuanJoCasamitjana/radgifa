@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" 
+width="100%"
+height="100%" 
+viewBox="0 0 500 500">
+<circle cx="250" cy="250" r="250" fill="black"/>
+<polygon points="70,75 400,50 250,270" fill="white"/>
+<polygon points="115,95 370,70 260,210" fill="black"/>
+<polygon points="225,220 290,210 440,410" fill="white"/>
+<polygon points="225,220 270,210 270,497" fill="white"/>
+</svg>
