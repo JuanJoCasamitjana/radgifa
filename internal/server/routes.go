@@ -112,6 +112,7 @@ func (s *Server) RegisterRoutes() http.Handler {
 
 	e.GET("/join/:token/info", s.getQuestionnaireInfoFromToken)
 	e.POST("/join/:token/info", s.getQuestionnaireInfoFromToken)
+	e.GET("/join/:token", s.serveFrontend)
 	e.POST("/join/:token", s.createQuestionnaireMember).Name = "join-questionnaire"
 
 	api := e.Group("/api")
@@ -163,6 +164,10 @@ func (s *Server) HelloWorldHandler(c echo.Context) error {
 
 	log.Info("responding hello world", zap.Int("status", http.StatusOK))
 	return c.JSON(http.StatusOK, resp)
+}
+
+func (s *Server) serveFrontend(c echo.Context) error {
+	return c.File("frontend/dist/index.html")
 }
 
 func setRequestsPerSecondLimit() rate.Limit {
