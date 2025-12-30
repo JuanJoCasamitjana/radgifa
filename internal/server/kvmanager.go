@@ -34,8 +34,10 @@ type KVManager interface {
 
 func NewKVManager() KVManager {
 	tmpStat, err := os.Stat(kvstoragePath)
-	if err != nil || os.IsNotExist(err) || !tmpStat.IsDir() {
-		log.Fatal("The /tmp directory does not exist, is not accessible, or is not a directory.")
+	if err != nil || (tmpStat != nil && !tmpStat.IsDir()) {
+		if err := os.MkdirAll(kvstoragePath, 0755); err != nil {
+			log.Fatalf("Failed to create KV storage directory at %s: %v", kvstoragePath, err)
+		}
 	}
 	badgerkvstoragePath := fmt.Sprintf("%s/badger", kvstoragePath)
 
