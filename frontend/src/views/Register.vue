@@ -408,7 +408,6 @@ const onUsernameInput = () => {
   onInput()
 }
 
-áticamente
 let usernameTimeout
 watch(() => form.username, (newVal) => {
   if (usernameTimeout) clearTimeout(usernameTimeout)
