@@ -48,7 +48,7 @@ type Service interface {
 	IsMemberIdentifierAvailable(questionnaireID uuid.UUID, uniqueIdentifier string, ctx context.Context) (bool, error)
 	CreateNewQuestion(questionnaireID uuid.UUID, text, theme string, ctx context.Context) (*ent.Question, error)
 	UpdateQuestionnaire(questionnaireID uuid.UUID, title, description string, ctx context.Context) (*ent.Questionnaire, error)
-	PublishQuestionnaire(questionnaireID uuid.UUID, ctx context.Context) (*ent.Questionnaire, error)
+	PublishQuestionnaire(questionnaireID, userID uuid.UUID, ctx context.Context) (*ent.Questionnaire, error)
 	DeleteQuestionnaire(questionnaireID uuid.UUID, ctx context.Context) error
 	UpdateQuestion(questionID uuid.UUID, text, theme string, ctx context.Context) (*ent.Question, error)
 	DeleteQuestion(questionID uuid.UUID, ctx context.Context) error
@@ -60,6 +60,7 @@ type Service interface {
 	GetUserQuestionnaires(userID uuid.UUID, ctx context.Context) ([]*ent.Questionnaire, error)
 	GetQuestionnaireWithDetails(questionnaireID uuid.UUID, ctx context.Context) (*ent.Questionnaire, error)
 	GetQuestionnaireQuestions(questionnaireID uuid.UUID, ctx context.Context) ([]*ent.Question, error)
+	GetQuestionnaireQuestionsWithAnswers(questionnaireID uuid.UUID, ctx context.Context) ([]*ent.Question, error)
 	GetQuestionnaireMembers(questionnaireID uuid.UUID, ctx context.Context) ([]*ent.Member, error)
 	GetMemberAnswers(memberID, questionnaireID uuid.UUID, ctx context.Context) ([]*ent.Answer, error)
 }
@@ -337,18 +338,75 @@ func (s *service) UpdateQuestionnaire(questionnaireID uuid.UUID, title, descript
 	return questionnaire, nil
 }
 
-func (s *service) PublishQuestionnaire(questionnaireID uuid.UUID, ctx context.Context) (*ent.Questionnaire, error) {
-	questionnaire, err := s.client.Questionnaire.UpdateOneID(questionnaireID).
+func (s *service) PublishQuestionnaire(questionnaireID, userID uuid.UUID, ctx context.Context) (*ent.Questionnaire, error) {
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer func() {
+		if v := recover(); v != nil {
+			tx.Rollback()
+			panic(v)
+		}
+	}()
+
+	updatedQuestionnaire, err := tx.Questionnaire.UpdateOneID(questionnaireID).
 		SetIsPublished(true).
 		Save(ctx)
 	if err != nil {
-		return nil, err
+		return nil, rollback(tx, fmt.Errorf("failed to update questionnaire: %w", err))
 	}
-	return questionnaire, nil
+
+	_, err = tx.Member.Query().
+		Where(
+			member.HasUserWith(user.ID(userID)),
+			member.HasQuestionnaireWith(questionnaire.ID(questionnaireID)),
+		).
+		Only(ctx)
+
+	if ent.IsNotFound(err) {
+		author, err := tx.User.Get(ctx, userID)
+		if err != nil {
+			return nil, rollback(tx, fmt.Errorf("failed to get user: %w", err))
+		}
+
+		authorIdentifier := "author_" + author.Username
+
+		existingWithIdentifier, err := tx.Member.Query().
+			Where(
+				member.HasQuestionnaireWith(questionnaire.ID(questionnaireID)),
+				member.UniqueIdentifier(authorIdentifier),
+			).
+			Exist(ctx)
+		if err != nil {
+			return nil, rollback(tx, fmt.Errorf("failed to check identifier availability: %w", err))
+		}
+
+		if existingWithIdentifier {
+			authorIdentifier = authorIdentifier + "_owner"
+		}
+
+		_, err = tx.Member.Create().
+			SetQuestionnaireID(questionnaireID).
+			SetUserID(userID).
+			SetUniqueIdentifier(authorIdentifier).
+			SetDisplayName(author.DisplayName).
+			SetPassCode([]byte{}).
+			Save(ctx)
+		if err != nil {
+			return nil, rollback(tx, fmt.Errorf("failed to create author member: %w", err))
+		}
+	} else if err != nil {
+		return nil, rollback(tx, fmt.Errorf("failed to query existing member: %w", err))
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return updatedQuestionnaire, nil
 }
 
 func (s *service) DeleteQuestionnaire(questionnaireID uuid.UUID, ctx context.Context) error {
-	// Start a transaction to ensure atomicity
 	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		return err
@@ -360,15 +418,12 @@ func (s *service) DeleteQuestionnaire(questionnaireID uuid.UUID, ctx context.Con
 		}
 	}()
 
-	// Delete all answers related to this questionnaire
 	_, err = tx.Answer.Delete().
 		Where(answer.HasQuestionWith(question.HasQuestionnaireWith(questionnaire.ID(questionnaireID)))).
 		Exec(ctx)
 	if err != nil {
 		return rollback(tx, err)
 	}
-
-	// Delete all questions
 	_, err = tx.Question.Delete().
 		Where(question.HasQuestionnaireWith(questionnaire.ID(questionnaireID))).
 		Exec(ctx)
@@ -376,7 +431,6 @@ func (s *service) DeleteQuestionnaire(questionnaireID uuid.UUID, ctx context.Con
 		return rollback(tx, err)
 	}
 
-	// Delete all members
 	_, err = tx.Member.Delete().
 		Where(member.HasQuestionnaireWith(questionnaire.ID(questionnaireID))).
 		Exec(ctx)
@@ -384,7 +438,6 @@ func (s *service) DeleteQuestionnaire(questionnaireID uuid.UUID, ctx context.Con
 		return rollback(tx, err)
 	}
 
-	// Delete the questionnaire
 	err = tx.Questionnaire.DeleteOneID(questionnaireID).Exec(ctx)
 	if err != nil {
 		return rollback(tx, err)
@@ -405,7 +458,6 @@ func (s *service) UpdateQuestion(questionID uuid.UUID, text, theme string, ctx c
 }
 
 func (s *service) DeleteQuestion(questionID uuid.UUID, ctx context.Context) error {
-	// Start a transaction to ensure atomicity
 	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		return err
@@ -417,7 +469,6 @@ func (s *service) DeleteQuestion(questionID uuid.UUID, ctx context.Context) erro
 		}
 	}()
 
-	// Delete all answers for this question
 	_, err = tx.Answer.Delete().
 		Where(answer.HasQuestionWith(question.ID(questionID))).
 		Exec(ctx)
@@ -425,7 +476,6 @@ func (s *service) DeleteQuestion(questionID uuid.UUID, ctx context.Context) erro
 		return rollback(tx, err)
 	}
 
-	// Delete the question
 	err = tx.Question.DeleteOneID(questionID).Exec(ctx)
 	if err != nil {
 		return rollback(tx, err)
@@ -434,7 +484,6 @@ func (s *service) DeleteQuestion(questionID uuid.UUID, ctx context.Context) erro
 	return tx.Commit()
 }
 
-// Helper function for transaction rollback
 func rollback(tx *ent.Tx, err error) error {
 	if rerr := tx.Rollback(); rerr != nil {
 		err = fmt.Errorf("%w: rolling back transaction: %v", err, rerr)
@@ -483,7 +532,6 @@ func (s *service) CreateAnswer(memberID, questionID uuid.UUID, answerValue strin
 		Save(ctx)
 }
 
-// GetUserQuestionnaires returns all questionnaires owned by a user
 func (s *service) GetUserQuestionnaires(userID uuid.UUID, ctx context.Context) ([]*ent.Questionnaire, error) {
 	return s.client.Questionnaire.Query().
 		Where(questionnaire.HasOwnerWith(user.ID(userID))).
@@ -491,7 +539,6 @@ func (s *service) GetUserQuestionnaires(userID uuid.UUID, ctx context.Context) (
 		All(ctx)
 }
 
-// GetQuestionnaireWithDetails returns a questionnaire with all its relations
 func (s *service) GetQuestionnaireWithDetails(questionnaireID uuid.UUID, ctx context.Context) (*ent.Questionnaire, error) {
 	return s.client.Questionnaire.Query().
 		Where(questionnaire.ID(questionnaireID)).
@@ -507,7 +554,6 @@ func (s *service) GetQuestionnaireWithDetails(questionnaireID uuid.UUID, ctx con
 		Only(ctx)
 }
 
-// GetQuestionnaireQuestions returns all questions for a questionnaire
 func (s *service) GetQuestionnaireQuestions(questionnaireID uuid.UUID, ctx context.Context) ([]*ent.Question, error) {
 	return s.client.Question.Query().
 		Where(question.HasQuestionnaireWith(questionnaire.ID(questionnaireID))).
@@ -515,7 +561,16 @@ func (s *service) GetQuestionnaireQuestions(questionnaireID uuid.UUID, ctx conte
 		All(ctx)
 }
 
-// GetQuestionnaireMembers returns all members of a questionnaire
+func (s *service) GetQuestionnaireQuestionsWithAnswers(questionnaireID uuid.UUID, ctx context.Context) ([]*ent.Question, error) {
+	return s.client.Question.Query().
+		Where(question.HasQuestionnaireWith(questionnaire.ID(questionnaireID))).
+		WithAnswers(func(q *ent.AnswerQuery) {
+			q.WithMember()
+		}).
+		Order(ent.Asc("created_at")).
+		All(ctx)
+}
+
 func (s *service) GetQuestionnaireMembers(questionnaireID uuid.UUID, ctx context.Context) ([]*ent.Member, error) {
 	return s.client.Member.Query().
 		Where(member.HasQuestionnaireWith(questionnaire.ID(questionnaireID))).
@@ -524,7 +579,6 @@ func (s *service) GetQuestionnaireMembers(questionnaireID uuid.UUID, ctx context
 		All(ctx)
 }
 
-// GetMemberAnswers returns all answers by a member for a specific questionnaire
 func (s *service) GetMemberAnswers(memberID, questionnaireID uuid.UUID, ctx context.Context) ([]*ent.Answer, error) {
 	return s.client.Answer.Query().
 		Where(

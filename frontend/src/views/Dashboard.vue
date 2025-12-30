@@ -138,6 +138,12 @@
       </div>
     </div>
   </div>
+
+  <QRModal
+    :show="qrModal.show"
+    :url="qrModal.url"
+    @close="qrModal.show = false"
+  />
 </template>
 
 <script setup>
@@ -146,6 +152,7 @@ import { useRouter } from 'vue-router'
 import { getters } from '../store/auth'
 import { questionnaireAPI } from '../services/api.js'
 import Icon from '../components/Icon.vue'
+import QRModal from '../components/QRModal.vue'
 
 const router = useRouter()
 
@@ -155,6 +162,10 @@ const questionnaires = ref([])
 
 
 const showDeleteModal = ref(false)
+const qrModal = reactive({
+  show: false,
+  url: ''
+})
 const questionnaireToDelete = ref(null)
 
 
@@ -231,7 +242,7 @@ const editQuestionnaire = (id) => {
   router.push('/questionnaires')
 }
 
-const shareQuestionnaire = (id) => {
+const shareQuestionnaire = async (id) => {
   const questionnaire = questionnaires.value.find(q => q.id === id)
   if (!questionnaire) return
   
@@ -240,13 +251,21 @@ const shareQuestionnaire = (id) => {
     return
   }
 
-  const shareUrl = `${window.location.origin}/survey/${id}`
-
-  navigator.clipboard.writeText(shareUrl).then(() => {
-    console.log('Share URL copied to clipboard:', shareUrl)
-  }).catch(() => {
-    prompt('Copy this URL to share your questionnaire:', shareUrl)
-  })
+  try {
+    const inviteResponse = await questionnaireAPI.generateInvite(id)
+    const shareUrl = inviteResponse.data.join_url || inviteResponse.data.url || inviteResponse.data.invite_url
+    
+    if (shareUrl) {
+      const fullUrl = shareUrl.startsWith('http') ? shareUrl : `${window.location.origin}${shareUrl}`
+      qrModal.url = fullUrl
+      qrModal.show = true
+    } else {
+      console.error('No URL received from invite generation')
+      console.log('Response data:', inviteResponse.data)
+    }
+  } catch (error) {
+    console.error('Error generating share URL:', error)
+  }
 }
 
 const deleteQuestionnaire = (id) => {

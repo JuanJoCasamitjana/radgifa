@@ -110,6 +110,8 @@ func (s *Server) RegisterRoutes() http.Handler {
 	e.POST("/check/username", s.checkUsernameAvailability)
 	e.POST("/check/member/:token", s.checkMemberIdentifierAvailability)
 
+	e.GET("/join/:token/info", s.getQuestionnaireInfoFromToken)
+	e.POST("/join/:token/info", s.getQuestionnaireInfoFromToken)
 	e.POST("/join/:token", s.createQuestionnaireMember).Name = "join-questionnaire"
 
 	api := e.Group("/api")

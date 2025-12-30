@@ -184,6 +184,49 @@
                 <Icon name="calendar" />
                 <span>{{ formatDate(question.createdAt) }}</span>
               </div>
+              <div class="meta-item">
+                <Icon name="users" />
+                <span>{{ getTotalAnswers(question) }} responses</span>
+              </div>
+            </div>
+            
+            <div v-if="hasAnswers(question)" class="question-results">
+              <div class="results-header">
+                <Icon name="bar-chart" />
+                <span>Results</span>
+              </div>
+              <div class="results-grid">
+                <div class="result-item">
+                  <div class="result-label">
+                    <Icon name="check" />
+                    <span>Yes</span>
+                  </div>
+                  <div class="result-bar">
+                    <div class="result-fill yes" :style="{ width: getPercentage(question, 'Yes') + '%' }"></div>
+                  </div>
+                  <div class="result-count">{{ getAnswerCount(question, 'Yes') }} ({{ getPercentage(question, 'Yes') }}%)</div>
+                </div>
+                <div class="result-item">
+                  <div class="result-label">
+                    <Icon name="x" />
+                    <span>No</span>
+                  </div>
+                  <div class="result-bar">
+                    <div class="result-fill no" :style="{ width: getPercentage(question, 'No') + '%' }"></div>
+                  </div>
+                  <div class="result-count">{{ getAnswerCount(question, 'No') }} ({{ getPercentage(question, 'No') }}%)</div>
+                </div>
+                <div class="result-item">
+                  <div class="result-label">
+                    <Icon name="minus" />
+                    <span>Pass</span>
+                  </div>
+                  <div class="result-bar">
+                    <div class="result-fill pass" :style="{ width: getPercentage(question, 'Pass') + '%' }"></div>
+                  </div>
+                  <div class="result-count">{{ getAnswerCount(question, 'Pass') }} ({{ getPercentage(question, 'Pass') }}%)</div>
+                </div>
+              </div>
             </div>
             
             <div class="question-actions">
@@ -541,6 +584,27 @@ const showError = (message) => {
 const closeConfirmModal = () => {
   confirmModal.show = false
   confirmModal.loading = false
+}
+
+const hasAnswers = (question) => {
+  return question.edges?.answers && question.edges.answers.length > 0
+}
+
+const getTotalAnswers = (question) => {
+  if (!question.edges?.answers) return 0
+  return question.edges.answers.length
+}
+
+const getAnswerCount = (question, value) => {
+  if (!question.edges?.answers) return 0
+  return question.edges.answers.filter(a => a.answer_value === value).length
+}
+
+const getPercentage = (question, value) => {
+  const total = getTotalAnswers(question)
+  if (total === 0) return 0
+  const count = getAnswerCount(question, value)
+  return Math.round((count / total) * 100)
 }
 
 onMounted(() => {
@@ -948,6 +1012,79 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 0.25rem;
+}
+
+.question-results {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.results-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.results-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.result-item {
+  display: grid;
+  grid-template-columns: 80px 1fr 120px;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.result-label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+.result-bar {
+  height: 24px;
+  background: #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+}
+
+.result-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+  border-radius: inherit;
+}
+
+.result-fill.yes {
+  background: linear-gradient(90deg, #10b981, #059669);
+}
+
+.result-fill.no {
+  background: linear-gradient(90deg, #ef4444, #dc2626);
+}
+
+.result-fill.pass {
+  background: linear-gradient(90deg, #f59e0b, #d97706);
+}
+
+.result-count {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #374151;
+  text-align: right;
 }
 
 .question-actions {

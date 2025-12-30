@@ -9,6 +9,8 @@ import CreateQuestionnaire from '../views/CreateQuestionnaire.vue'
 import Questionnaires from '../views/Questionnaires.vue'
 import QuestionnaireQuestions from '../views/QuestionnaireQuestions.vue'
 import QuestionnaireResponses from '../views/QuestionnaireResponses.vue'
+import JoinQuestionnaire from '../views/JoinQuestionnaire.vue'
+import AnswerQuestionnaire from '../views/AnswerQuestionnaire.vue'
 
 const routes = [
   {
@@ -59,6 +61,19 @@ const routes = [
     component: QuestionnaireResponses,
     meta: { requiresAuth: true }
   },
+  {
+    path: '/join/:token',
+    name: 'JoinQuestionnaire',
+    component: JoinQuestionnaire,
+    meta: { requiresAuth: false }
+  },
+  {
+    path: '/answer/:token',
+    name: 'AnswerQuestionnaire', 
+    component: AnswerQuestionnaire,
+    meta: { requiresAuth: false }
+  },
+  // Duplicate routes removed
   {
     path: '/:pathMatch(.*)*',
     name: 'NotFound',

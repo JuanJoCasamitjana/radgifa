@@ -162,6 +162,22 @@ func (s *Server) createQuestionnaireMember(c echo.Context) error {
 	ctx := c.Request().Context()
 	log := GetLogger(c)
 
+	if userID != uuid.Nil {
+		existingMember, err := s.service.GetMemberByUserAndQuestionnaire(userID, questionnaireID, ctx)
+		if err == nil && existingMember != nil {
+			log.Info("authenticated user already member, returning existing member",
+				zap.String("user_id", userID.String()),
+				zap.String("member_id", existingMember.ID.String()),
+				zap.String("questionnaire_id", questionnaireID.String()))
+
+			return c.JSON(200, map[string]interface{}{
+				"member_id":      existingMember.ID,
+				"already_member": true,
+				"message":        "You are already a member of this questionnaire",
+			})
+		}
+	}
+
 	if memberReq.Action == "login" {
 		if memberReq.Passcode == "" {
 			return c.JSON(400, map[string]interface{}{
@@ -403,6 +419,43 @@ func (s *Server) checkMemberIdentifierAvailability(c echo.Context) error {
 	})
 }
 
+// getQuestionnaireInfoFromToken gets questionnaire information from an invitation token
+// @Summary Get questionnaire info from token
+// @Description Get basic questionnaire information using an invitation token
+// @Tags questionnaires
+// @Produce json
+// @Param token path string true "Questionnaire invitation token"
+// @Success 200 {object} map[string]interface{} "Questionnaire information"
+// @Failure 400 {object} map[string]string "Invalid or expired token"
+// @Failure 404 {object} map[string]string "Questionnaire not found"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /join/{token}/info [get]
+func (s *Server) getQuestionnaireInfoFromToken(c echo.Context) error {
+	token := c.Param("token")
+	val, err := s.kvmanager.Get([]byte(token))
+	if err != nil || val == nil {
+		return c.JSON(400, map[string]string{"error": "invalid or expired token"})
+	}
+
+	questionnaireID, err := uuid.Parse(string(val))
+	if err != nil {
+		return c.JSON(400, map[string]string{"error": "invalid or expired token"})
+	}
+
+	ctx := c.Request().Context()
+	questionnaire, err := s.service.GetQuestionnaire(questionnaireID, ctx)
+	if err != nil {
+		return c.JSON(404, map[string]string{"error": "questionnaire not found"})
+	}
+
+	return c.JSON(200, map[string]interface{}{
+		"questionnaire_id": questionnaire.ID,
+		"title":            questionnaire.Title,
+		"description":      questionnaire.Description,
+		"is_published":     questionnaire.IsPublished,
+	})
+}
+
 // createNewQuestion creates a new question in a questionnaire
 // @Summary Create new question
 // @Description Create a new question in a specific questionnaire (only owner can do this)
@@ -581,8 +634,13 @@ func (s *Server) publishQuestionnaire(c echo.Context) error {
 		return c.JSON(409, map[string]string{"error": "questionnaire already published"})
 	}
 
-	updatedQuestionnaire, err := s.service.PublishQuestionnaire(questionnaireUUID, ctx)
+	updatedQuestionnaire, err := s.service.PublishQuestionnaire(questionnaireUUID, userID, ctx)
 	if err != nil {
+		log := GetLogger(c)
+		log.Error("failed to publish questionnaire",
+			zap.String("questionnaire_id", questionnaireUUID.String()),
+			zap.String("user_id", userID.String()),
+			zap.Error(err))
 		return c.JSON(500, map[string]string{"error": "could not publish questionnaire"})
 	}
 
@@ -943,7 +1001,7 @@ func (s *Server) getQuestionnaireQuestions(c echo.Context) error {
 		return c.JSON(403, map[string]string{"error": "forbidden"})
 	}
 
-	questions, err := s.service.GetQuestionnaireQuestions(qID, ctx)
+	questions, err := s.service.GetQuestionnaireQuestionsWithAnswers(qID, ctx)
 	if err != nil {
 		log := GetLogger(c)
 		log.Error("failed to get questionnaire questions",

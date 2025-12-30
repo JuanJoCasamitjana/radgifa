@@ -45,53 +45,52 @@ export const authAPI = {
 
 export const questionnaireAPI = {
   
-  getMyQuestionnaires: () => api.get('/api/questionnaires'),
+  getMyQuestionnaires: (config = {}) => api.get('/api/questionnaires', config),
   
   
-  create: (data) => api.post('/api/questionnaires', data),
+  create: (data, config = {}) => api.post('/api/questionnaires', data, config),
   
   
-  update: (id, data) => api.put(`/api/questionnaires/${id}`, data),
+  update: (id, data, config = {}) => api.put(`/api/questionnaires/${id}`, data, config),
   
   
-  delete: (id) => api.delete(`/api/questionnaires/${id}`),
+  delete: (id, config = {}) => api.delete(`/api/questionnaires/${id}`, config),
   
   
-  publish: (id) => api.post(`/api/questionnaires/${id}/publish`),
+  publish: (id, config = {}) => api.post(`/api/questionnaires/${id}/publish`, null, config),
   
   
-  getDetails: (id) => api.get(`/api/questionnaires/${id}`),
+  getDetails: (id, config = {}) => api.get(`/api/questionnaires/${id}`, config),
   
   
-  getQuestions: (id) => api.get(`/api/questionnaires/${id}/questions`),
+  getQuestions: (id, config = {}) => api.get(`/api/questionnaires/${id}/questions`, config),
   
   
-  getMyAnswers: (id) => api.get(`/api/questionnaires/${id}/my-answers`),
+  getMyAnswers: (id, config = {}) => api.get(`/api/questionnaires/${id}/my-answers`, config),
   
   
-  getMembers: (id) => api.get(`/api/questionnaires/${id}/members`),
+  getMembers: (id, config = {}) => api.get(`/api/questionnaires/${id}/members`, config),
   
-  generateInvite: (id) => api.post(`/api/questionnaires/${id}/invite`),
-  
-  
-  createQuestion: (id, questionData) => api.post(`/api/questionnaires/${id}/question`, questionData),
+  generateInvite: (id, config = {}) => api.post(`/api/questionnaires/${id}/invite`, null, config),
   
   
-  updateQuestion: (questionnaireId, questionId, questionData) => api.put(`/api/questionnaires/${questionnaireId}/questions/${questionId}`, questionData),
+  createQuestion: (id, questionData, config = {}) => api.post(`/api/questionnaires/${id}/question`, questionData, config),
   
   
-  deleteQuestion: (questionnaireId, questionId) => api.delete(`/api/questionnaires/${questionnaireId}/questions/${questionId}`),
+  updateQuestion: (questionnaireId, questionId, questionData, config = {}) => api.put(`/api/questionnaires/${questionnaireId}/questions/${questionId}`, questionData, config),
+  
+  
+  deleteQuestion: (questionnaireId, questionId, config = {}) => api.delete(`/api/questionnaires/${questionnaireId}/questions/${questionId}`, config),
 }
 
 export const participationAPI = {
-  
   joinQuestionnaire: (token, memberData) => api.post(`/join/${token}`, memberData),
-  
   
   checkMemberIdentifier: (token, identifier) => api.post(`/check/member/${token}`, { value: identifier }),
   
+  getQuestionnaireInfo: (token) => api.get(`/join/${token}/info`),
   
-  answerQuestion: (questionId, answer) => api.post(`/api/question/${questionId}`, answer),
+  answerQuestion: (questionId, answer, config = {}) => api.post(`/api/question/${questionId}`, answer, config),
 }
 
 

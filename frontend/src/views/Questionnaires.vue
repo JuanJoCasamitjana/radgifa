@@ -234,6 +234,12 @@
     @confirm="confirmModal.onConfirm"
     @cancel="closeConfirmModal"
   />
+
+  <QRModal
+    :show="qrModal.show"
+    :url="qrModal.url"
+    @close="qrModal.show = false"
+  />
 </template>
 
 <script setup>
@@ -242,6 +248,7 @@ import { useRouter } from 'vue-router'
 import { questionnaireAPI } from '../services/api.js'
 import Icon from '../components/Icon.vue'
 import ConfirmModal from '../components/ConfirmModal.vue'
+import QRModal from '../components/QRModal.vue'
 
 const router = useRouter()
 
@@ -269,6 +276,10 @@ const confirmModal = reactive({
   onConfirm: () => {}
 })
 
+const qrModal = reactive({
+  show: false,
+  url: ''
+})
 
 const filters = reactive({
   search: ''
@@ -437,26 +448,48 @@ const publishQuestionnaire = (id) => {
 const executePublish = async (id) => {
   try {
     confirmModal.loading = true
-      await questionnaireAPI.publish(id)
-      
-      const questionnaire = questionnaires.value.find(q => q.id === id)
-      if (questionnaire) {
-        questionnaire.is_published = true
-      }
-      console.log('Questionnaire published successfully!')
-      closeConfirmModal()
-    } catch (error) {
-      console.error('Error publishing questionnaire:', error)
-    } finally {
-      confirmModal.loading = false
+    await questionnaireAPI.publish(id)
+    
+    const questionnaire = questionnaires.value.find(q => q.id === id)
+    if (questionnaire) {
+      questionnaire.is_published = true
     }
+    
+    try {
+      const inviteResponse = await questionnaireAPI.generateInvite(id)
+      const inviteUrl = inviteResponse.data.join_url || inviteResponse.data.url || inviteResponse.data.invite_url
+      
+      if (inviteUrl) {
+        const fullUrl = inviteUrl.startsWith('http') ? inviteUrl : `${window.location.origin}${inviteUrl}`
+        
+        navigator.clipboard.writeText(fullUrl).then(() => {
+          console.log('Questionnaire published and invite URL copied to clipboard:', fullUrl)
+        }).catch(() => {
+          console.log('Questionnaire published. Invite URL:', fullUrl)
+          prompt('Questionnaire published! Copy this URL to invite participants:', fullUrl)
+        })
+      } else {
+        console.error('No invite URL received')
+        console.log('Response data:', inviteResponse.data)
+      }
+    } catch (inviteError) {
+      console.error('Failed to generate invite URL:', inviteError)
+    }
+    
+    console.log('Questionnaire published successfully!')
+    closeConfirmModal()
+  } catch (error) {
+    console.error('Error publishing questionnaire:', error)
+  } finally {
+    confirmModal.loading = false
+  }
 }
 
 const viewResponses = (id) => {
   router.push(`/questionnaire/${id}/responses`)
 }
 
-const shareQuestionnaire = (id) => {
+const shareQuestionnaire = async (id) => {
   const questionnaire = questionnaires.value.find(q => q.id === id)
   if (!questionnaire) return
   
@@ -465,16 +498,21 @@ const shareQuestionnaire = (id) => {
     return
   }
   
-  
-  const shareUrl = `${window.location.origin}/survey/${id}`
-  
-  
-  navigator.clipboard.writeText(shareUrl).then(() => {
-    console.log('Share URL copied to clipboard:', shareUrl)
-  }).catch(() => {
+  try {
+    const inviteResponse = await questionnaireAPI.generateInvite(id)
+    const shareUrl = inviteResponse.data.join_url || inviteResponse.data.url || inviteResponse.data.invite_url
     
-    prompt('Copy this URL to share your questionnaire:', shareUrl)
-  })
+    if (shareUrl) {
+      const fullUrl = shareUrl.startsWith('http') ? shareUrl : `${window.location.origin}${shareUrl}`
+      qrModal.url = fullUrl
+      qrModal.show = true
+    } else {
+      console.error('No URL received from invite generation')
+      console.log('Response data:', inviteResponse.data)
+    }
+  } catch (error) {
+    console.error('Error generating share URL:', error)
+  }
 }
 
 const deleteQuestionnaire = (id) => {
