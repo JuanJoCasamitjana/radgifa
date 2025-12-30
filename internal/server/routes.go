@@ -141,6 +141,14 @@ func (s *Server) RegisterRoutes() http.Handler {
 	// Swagger endpoint
 	e.GET("/swagger/*", echoSwagger.WrapHandler)
 
+	// Serve static frontend files
+	e.Use(middleware.StaticWithConfig(middleware.StaticConfig{
+		Root:   "frontend/dist",
+		Index:  "index.html",
+		Browse: false,
+		HTML5:  true,
+	}))
+
 	return e
 }
 
