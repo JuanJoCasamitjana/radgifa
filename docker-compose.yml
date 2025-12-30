@@ -20,6 +20,7 @@ services:
 
   psql_bp:
     image: postgres:18-alpine
+    container_name: psql_bp
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${DB_NAME}
