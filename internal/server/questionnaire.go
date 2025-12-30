@@ -921,7 +921,6 @@ func (s *Server) getQuestionnaireQuestions(c echo.Context) error {
 	}
 
 	ctx := c.Request().Context()
-	// First check if questionnaire exists and user has access
 	questionnaire, err := s.service.GetQuestionnaireWithDetails(qID, ctx)
 	if err != nil {
 		return c.JSON(404, map[string]string{"error": "questionnaire not found"})

@@ -1,6 +1,5 @@
 <template>
   <div class="questionnaire-questions">
-    <!-- Header -->
     <div class="page-header">
       <div class="header-content">
         <div class="breadcrumb">
@@ -29,13 +28,11 @@
       </div>
     </div>
 
-    <!-- Loading State -->
     <div v-if="loading" class="loading-state">
       <Icon name="loading" />
       Loading questions...
     </div>
 
-    <!-- Add Question Form -->
     <div v-if="showAddQuestionForm" class="add-question-form">
       <div class="form-overlay" @click="cancelAddQuestion"></div>
       <div class="form-content">
@@ -92,7 +89,6 @@
       </div>
     </div>
 
-    <!-- Edit Question Form -->
     <div v-if="showEditQuestionForm" class="add-question-form">
       <div class="form-overlay" @click="cancelEditQuestion"></div>
       <div class="form-content">
@@ -145,9 +141,7 @@
       </div>
     </div>
 
-    <!-- Questions List -->
     <div v-else-if="!loading" class="questions-container">
-      <!-- Empty State -->
       <div v-if="questions.length === 0" class="empty-state">
         <Icon name="help" />
         <h3>No questions yet</h3>
@@ -158,7 +152,7 @@
         </button>
       </div>
 
-      <!-- Questions List -->
+
       <div v-else class="questions-list">
         <div class="list-header">
           <h3>Questions ({{ questions.length }})</h3>
@@ -215,18 +209,27 @@
       </div>
     </div>
 
-    <!-- Success Message -->
     <div v-if="successMessage" class="success-toast">
       <Icon name="check" />
       {{ successMessage }}
     </div>
 
-    <!-- Error Message -->
     <div v-if="errorMessage" class="error-toast">
       <Icon name="x" />
       {{ errorMessage }}
     </div>
   </div>
+
+  <ConfirmModal
+    :show="confirmModal.show"
+    :title="confirmModal.title"
+    :message="confirmModal.message"
+    :confirm-text="confirmModal.confirmText"
+    :type="confirmModal.type"
+    :loading="confirmModal.loading"
+    @confirm="confirmModal.onConfirm"
+    @cancel="closeConfirmModal"
+  />
 </template>
 
 <script setup>
@@ -234,6 +237,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { questionnaireAPI } from '../services/api.js'
 import Icon from '../components/Icon.vue'
+import ConfirmModal from '../components/ConfirmModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -241,14 +245,32 @@ const router = useRouter()
 
 const loading = ref(false)
 const submitting = ref(false)
+const editSubmitting = ref(false)
 const questionnaire = ref(null)
 const questions = ref([])
 const showAddQuestionForm = ref(false)
+const showEditQuestionForm = ref(false)
+const editingQuestion = ref(null)
 const successMessage = ref('')
 const errorMessage = ref('')
 
+const confirmModal = reactive({
+  show: false,
+  title: '',
+  message: '',
+  confirmText: 'Confirm',
+  type: 'danger',
+  loading: false,
+  onConfirm: () => {}
+})
+
 
 const newQuestion = reactive({
+  text: '',
+  theme: ''
+})
+
+const editQuestion = reactive({
   text: '',
   theme: ''
 })
@@ -271,7 +293,12 @@ const loadData = async () => {
     
     
     const questionsResponse = await questionnaireAPI.getQuestions(questionnaireId)
-    questions.value = questionsResponse.data || []
+    const rawQuestions = questionsResponse.data || []
+    
+    questions.value = rawQuestions.map(q => ({
+      ...q,
+      createdAt: q.created_at || q.createdAt || q.date_created || q.created || Date.now()
+    }))
   } catch (error) {
     console.error('Error loading data:', error)
     showError('Failed to load questionnaire data')
@@ -361,12 +388,15 @@ const cancelAddQuestion = () => {
 
 const editQuestionHandler = (question) => {
   if (questionnaire.value?.is_published) {
-    alert('Cannot edit questions in published questionnaires')
+    console.warn('Cannot edit questions in published questionnaires')
     return
   }
   
+  errors.text = ''
+  errors.theme = ''
+  
   editingQuestion.value = question
-  editQuestion.text = question.text
+  editQuestion.text = question.text || ''
   editQuestion.theme = question.theme || ''
   showEditQuestionForm.value = true
 }
@@ -377,12 +407,28 @@ const cancelEditQuestion = () => {
   editingQuestion.value = null
   editQuestion.text = ''
   editQuestion.theme = ''
+  
+  errors.text = ''
+  errors.theme = ''
 }
 
 
 const submitEditQuestion = async () => {
+  errors.text = ''
+  errors.theme = ''
+  
   if (!editQuestion.text.trim()) {
-    alert('Question text is required')
+    errors.text = 'Question text is required'
+    return
+  }
+  
+  if (editQuestion.text.trim().length < 5) {
+    errors.text = 'Question text must be at least 5 characters'
+    return
+  }
+  
+  if (editQuestion.theme && editQuestion.theme.trim().length > 255) {
+    errors.theme = 'Theme cannot exceed 255 characters'
     return
   }
   
@@ -418,27 +464,35 @@ const submitEditQuestion = async () => {
 
 const deleteQuestionHandler = async (questionId) => {
   if (questionnaire.value?.is_published) {
-    alert('Cannot delete questions from published questionnaires')
+    console.warn('Cannot delete questions from published questionnaires')
     return
   }
   
   const question = questions.value.find(q => q.id === questionId)
   if (!question) return
   
-  const confirmMessage = `Are you sure you want to delete the question "${question.text}"? This action cannot be undone.`
-  
-  if (confirm(confirmMessage)) {
-    try {
-      await questionnaireAPI.deleteQuestion(questionnaireId, questionId)
-      
-      
-      questions.value = questions.value.filter(q => q.id !== questionId)
-      
-      showSuccess('Question deleted successfully!')
-    } catch (error) {
-      console.error('Error deleting question:', error)
-      showError(error.response?.data?.error || 'Failed to delete question')
-    }
+  confirmModal.show = true
+  confirmModal.title = 'Delete Question'
+  confirmModal.message = `Are you sure you want to delete the question "${question.text}"? This action cannot be undone.`
+  confirmModal.confirmText = 'Delete'
+  confirmModal.type = 'danger'
+  confirmModal.onConfirm = () => executeDeleteQuestion(questionnaireId, questionId)
+}
+
+const executeDeleteQuestion = async (questionnaireId, questionId) => {
+  try {
+    confirmModal.loading = true
+    await questionnaireAPI.deleteQuestion(questionnaireId, questionId)
+    
+    questions.value = questions.value.filter(q => q.id !== questionId)
+    
+    showSuccess('Question deleted successfully!')
+    closeConfirmModal()
+  } catch (error) {
+    console.error('Error deleting question:', error)
+    showError(error.response?.data?.error || 'Failed to delete question')
+  } finally {
+    confirmModal.loading = false
   }
 }
 
@@ -446,7 +500,15 @@ const deleteQuestionHandler = async (questionId) => {
 const formatDate = (date) => {
   if (!date) return 'No date'
   
-  const dateObj = new Date(date)
+  let dateObj
+  if (typeof date === 'number') {
+    dateObj = new Date(date)
+  } else if (typeof date === 'string') {
+    dateObj = new Date(date)
+  } else {
+    return 'Invalid date'
+  }
+  
   if (isNaN(dateObj.getTime())) {
     return 'Invalid date'
   }
@@ -476,6 +538,10 @@ const showError = (message) => {
   }, 5000)
 }
 
+const closeConfirmModal = () => {
+  confirmModal.show = false
+  confirmModal.loading = false
+}
 
 onMounted(() => {
   loadData()

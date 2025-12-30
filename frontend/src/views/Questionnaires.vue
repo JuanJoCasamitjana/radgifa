@@ -19,7 +19,6 @@
       </div>
     </div>
 
-    <!-- Filters -->
     <div class="filters-bar">
       <div class="filter-group">
         <label>Search:</label>
@@ -36,13 +35,11 @@
       </div>
     </div>
 
-    <!-- Loading State -->
     <div v-if="loading" class="loading-state">
       <Icon name="loading" />
       Loading questionnaires...
     </div>
 
-    <!-- Empty State -->
     <div v-else-if="questionnaires.length === 0" class="empty-state">
       <Icon name="plus" />
       <h3>No questionnaires found</h3>
@@ -53,9 +50,7 @@
       </button>
     </div>
 
-    <!-- Questionnaires List -->
     <div v-else class="questionnaires-container">
-      <!-- List View Toggle -->
       <div class="view-controls">
         <div class="view-toggle">
           <button 
@@ -86,13 +81,11 @@
         </div>
       </div>
 
-      <!-- Grid View -->
       <div v-if="viewMode === 'grid'" class="questionnaires-grid">
         <template v-for="questionnaire in sortedQuestionnaires" :key="questionnaire.id">
           <div 
             v-if="questionnaire && questionnaire.title"
             class="questionnaire-card"
-            @click="openQuestionnaire(questionnaire.id)"
           >
           <div class="card-header">
             <h3>{{ questionnaire.title }}</h3>
@@ -125,9 +118,6 @@
             <button v-if="!questionnaire.is_published" @click.stop="publishQuestionnaire(questionnaire.id)" class="action-link publish">
               Publish
             </button>
-            <button @click.stop="viewResponses(questionnaire.id)" class="action-link">
-              Responses
-            </button>
             <button @click.stop="shareQuestionnaire(questionnaire.id)" class="action-link">
               Share
             </button>
@@ -139,7 +129,6 @@
         </template>
       </div>
 
-      <!-- List View -->
       <div v-else class="questionnaires-list">
         <div class="list-header">
           <div class="col-title">Title</div>
@@ -234,6 +223,17 @@
       </form>
     </div>
   </div>
+
+  <ConfirmModal
+    :show="confirmModal.show"
+    :title="confirmModal.title"
+    :message="confirmModal.message"
+    :confirm-text="confirmModal.confirmText"
+    :type="confirmModal.type"
+    :loading="confirmModal.loading"
+    @confirm="confirmModal.onConfirm"
+    @cancel="closeConfirmModal"
+  />
 </template>
 
 <script setup>
@@ -241,6 +241,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { questionnaireAPI } from '../services/api.js'
 import Icon from '../components/Icon.vue'
+import ConfirmModal from '../components/ConfirmModal.vue'
 
 const router = useRouter()
 
@@ -256,6 +257,16 @@ const editingQuestionnaireId = ref(null)
 const editForm = reactive({
   title: '',
   description: ''
+})
+
+const confirmModal = reactive({
+  show: false,
+  title: '',
+  message: '',
+  confirmText: 'Confirm',
+  type: 'warning',
+  loading: false,
+  onConfirm: () => {}
 })
 
 
@@ -396,7 +407,7 @@ const saveQuestionnaire = async () => {
       description: editForm.description.trim()
     }
     
-    await questionnaireAPI.updateQuestionnaire(editingQuestionnaireId.value, updateData)
+    await questionnaireAPI.update(editingQuestionnaireId.value, updateData)
     
     
     const questionnaire = questionnaires.value.find(q => q.id === editingQuestionnaireId.value)
@@ -406,33 +417,39 @@ const saveQuestionnaire = async () => {
     }
     
     closeEditModal()
-    alert('Questionnaire updated successfully!')
+    console.log('Questionnaire updated successfully!')
   } catch (error) {
     console.error('Error updating questionnaire:', error)
-    alert(error.response?.data?.error || 'Failed to update questionnaire')
   } finally {
     editLoading.value = false
   }
 }
 
-const publishQuestionnaire = async (id) => {
-  if (confirm('Are you sure you want to publish this questionnaire? Once published, it cannot be edited.')) {
-    try {
-      loading.value = true
-      await questionnaireAPI.publishQuestionnaire(id)
+const publishQuestionnaire = (id) => {
+  confirmModal.show = true
+  confirmModal.title = 'Publish Questionnaire'
+  confirmModal.message = 'Are you sure you want to publish this questionnaire? Once published, it cannot be edited.'
+  confirmModal.confirmText = 'Publish'
+  confirmModal.type = 'warning'
+  confirmModal.onConfirm = () => executePublish(id)
+}
+
+const executePublish = async (id) => {
+  try {
+    confirmModal.loading = true
+      await questionnaireAPI.publish(id)
       
       const questionnaire = questionnaires.value.find(q => q.id === id)
       if (questionnaire) {
         questionnaire.is_published = true
       }
-      alert('Questionnaire published successfully!')
+      console.log('Questionnaire published successfully!')
+      closeConfirmModal()
     } catch (error) {
       console.error('Error publishing questionnaire:', error)
-      alert(error.response?.data?.error || 'Failed to publish questionnaire')
     } finally {
-      loading.value = false
+      confirmModal.loading = false
     }
-  }
 }
 
 const viewResponses = (id) => {
@@ -444,7 +461,7 @@ const shareQuestionnaire = (id) => {
   if (!questionnaire) return
   
   if (!questionnaire.is_published) {
-    alert('Please publish the questionnaire before sharing it.')
+    console.warn('Cannot share unpublished questionnaire')
     return
   }
   
@@ -453,34 +470,46 @@ const shareQuestionnaire = (id) => {
   
   
   navigator.clipboard.writeText(shareUrl).then(() => {
-    alert(`Share URL copied to clipboard:\n${shareUrl}`)
+    console.log('Share URL copied to clipboard:', shareUrl)
   }).catch(() => {
     
     prompt('Copy this URL to share your questionnaire:', shareUrl)
   })
 }
 
-const deleteQuestionnaire = async (id) => {
+const deleteQuestionnaire = (id) => {
   const questionnaire = questionnaires.value.find(q => q.id === id)
   const message = questionnaire?.is_published 
     ? 'This questionnaire is published. Deleting it will also delete all responses. This action cannot be undone.'
     : 'Are you sure you want to delete this questionnaire? This action cannot be undone.'
     
-  if (confirm(message)) {
-    try {
-      loading.value = true
-      await questionnaireAPI.deleteQuestionnaire(id)
-      questionnaires.value = questionnaires.value.filter(q => q.id !== id)
-      alert('Questionnaire deleted successfully!')
-    } catch (error) {
-      console.error('Error deleting questionnaire:', error)
-      alert(error.response?.data?.error || 'Failed to delete questionnaire')
-    } finally {
-      loading.value = false
-    }
-  }
+  confirmModal.show = true
+  confirmModal.title = 'Delete Questionnaire'
+  confirmModal.message = message
+  confirmModal.confirmText = 'Delete'
+  confirmModal.type = 'danger'
+  confirmModal.onConfirm = () => executeDelete(id)
 }
 
+const executeDelete = async (id) => {
+  try {
+    confirmModal.loading = true
+      await questionnaireAPI.delete(id)
+      questionnaires.value = questionnaires.value.filter(q => q.id !== id)
+      console.log('Questionnaire deleted successfully!')
+      closeConfirmModal()
+    } catch (error) {
+      console.error('Error deleting questionnaire:', error)
+    } finally {
+      confirmModal.loading = false
+    }
+}
+
+
+const closeConfirmModal = () => {
+  confirmModal.show = false
+  confirmModal.loading = false
+}
 
 onMounted(() => {
   loadData()
@@ -733,7 +762,7 @@ onMounted(() => {
 
 .list-header {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr 1.5fr;
+  grid-template-columns: 2fr 100px 150px 2fr;
   gap: 1rem;
   padding: 1rem 1.5rem;
   background: #f9fafb;
@@ -744,16 +773,38 @@ onMounted(() => {
 
 .list-item {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr 1.5fr;
+  grid-template-columns: 2fr 100px 150px 2fr;
   gap: 1rem;
   padding: 1rem 1.5rem;
   border-bottom: 1px solid #f3f4f6;
-  cursor: pointer;
   transition: background-color 0.2s;
 }
 
 .list-item:hover {
   background: #f9fafb;
+}
+
+.col-title {
+  min-width: 0;
+}
+
+.col-responses,
+.col-created {
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+}
+
+.col-created {
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.list-header .col-responses,
+.list-header .col-created {
+  justify-content: center;
 }
 
 .item-title {
@@ -770,6 +821,8 @@ onMounted(() => {
 .col-actions {
   display: flex;
   gap: 0.5rem;
+  align-items: center;
+  min-height: 40px;
 }
 
 .action-btn {
@@ -783,6 +836,8 @@ onMounted(() => {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
+  height: 36px;
+  box-sizing: border-box;
 }
 
 .action-btn.primary {
@@ -805,11 +860,13 @@ onMounted(() => {
 }
 
 .action-btn.small {
-  padding: 0.25rem 0.75rem;
+  padding: 0.5rem 0.75rem;
   font-size: 0.75rem;
   background: #f3f4f6;
   color: #374151;
   border: 1px solid #d1d5db;
+  height: 32px;
+  border-radius: 4px;
 }
 
 .action-btn.small:hover {

@@ -19,7 +19,6 @@
             <span>Create</span>
           </router-link>
           
-          <!-- User Menu -->
           <div class="user-menu" ref="userMenuRef">
             <button 
               class="user-button" 

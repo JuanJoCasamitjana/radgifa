@@ -105,7 +105,6 @@
     </div>
   </div>
 
-  <!-- Modal de Confirmación de Eliminación -->
   <div v-if="showDeleteModal" class="modal-overlay" @click="closeDeleteModal">
     <div class="modal-content" @click.stop>
       <div class="modal-header">
@@ -237,14 +236,14 @@ const shareQuestionnaire = (id) => {
   if (!questionnaire) return
   
   if (!questionnaire.is_published) {
-    alert('Please publish the questionnaire before sharing it.')
+    console.warn('Cannot share unpublished questionnaire')
     return
   }
 
   const shareUrl = `${window.location.origin}/survey/${id}`
 
   navigator.clipboard.writeText(shareUrl).then(() => {
-    alert(`Share URL copied to clipboard:\n${shareUrl}`)
+    console.log('Share URL copied to clipboard:', shareUrl)
   }).catch(() => {
     prompt('Copy this URL to share your questionnaire:', shareUrl)
   })
@@ -262,13 +261,12 @@ const confirmDelete = async () => {
   if (!questionnaireToDelete.value) return
   
   try {
-    await questionnaireAPI.deleteQuestionnaire(questionnaireToDelete.value.id)
+    await questionnaireAPI.delete(questionnaireToDelete.value.id)
     questionnaires.value = questionnaires.value.filter(q => q.id !== questionnaireToDelete.value.id)
     updateStats()
     closeDeleteModal()
   } catch (error) {
     console.error('Error deleting questionnaire:', error)
-    alert(error.response?.data?.error || 'Failed to delete questionnaire')
   }
 }
 

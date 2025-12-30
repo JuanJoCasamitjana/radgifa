@@ -146,16 +146,13 @@ const handleSubmit = async () => {
     
     console.log('Creating questionnaire:', requestBody)
     
-    // Real API call to create questionnaire
     const response = await questionnaireAPI.create(requestBody)
     console.log('Questionnaire created successfully:', response.data)
     
-    // Navigate back to questionnaires list
     await router.push('/questionnaires')
   } catch (error) {
     console.error('Failed to create questionnaire:', error)
     
-    // Show user-friendly error message
     let errorMessage = 'Failed to create questionnaire. Please try again.'
     
     if (error.response?.status === 401) {
@@ -167,7 +164,7 @@ const handleSubmit = async () => {
       errorMessage = error.response.data.message
     }
     
-    alert(errorMessage) // TODO: Replace with better error UI
+    console.error('Error creating questionnaire:', errorMessage)
   } finally {
     loading.value = false
   }

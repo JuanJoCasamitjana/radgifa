@@ -1,6 +1,5 @@
 <template>
   <div class="questionnaire-responses">
-    <!-- Header -->
     <div class="page-header">
       <div class="header-content">
         <div class="breadcrumb">
@@ -29,13 +28,13 @@
       </div>
     </div>
 
-    <!-- Loading State -->
+
     <div v-if="loading" class="loading-state">
       <Icon name="loading" />
       Loading responses...
     </div>
 
-    <!-- Statistics -->
+
     <div v-else-if="questionnaire" class="stats-section">
       <div class="stats-grid">
         <div class="stat-card">
@@ -80,9 +79,7 @@
       </div>
     </div>
 
-    <!-- Responses Content -->
     <div v-if="!loading" class="responses-container">
-      <!-- Empty State -->
       <div v-if="responses.length === 0" class="empty-state">
         <Icon name="inbox" />
         <h3>No responses yet</h3>
@@ -98,7 +95,6 @@
         </button>
       </div>
 
-      <!-- Responses Table -->
       <div v-else class="responses-table-container">
         <div class="table-header">
           <h3>Responses ({{ responses.length }})</h3>
@@ -156,7 +152,6 @@
       </div>
     </div>
 
-    <!-- Success/Error Messages -->
     <div v-if="successMessage" class="success-toast">
       <Icon name="check" />
       {{ successMessage }}
@@ -167,6 +162,17 @@
       {{ errorMessage }}
     </div>
   </div>
+
+  <ConfirmModal
+    :show="confirmModal.show"
+    :title="confirmModal.title"
+    :message="confirmModal.message"
+    :confirm-text="confirmModal.confirmText"
+    :type="confirmModal.type"
+    :loading="confirmModal.loading"
+    @confirm="confirmModal.onConfirm"
+    @cancel="closeConfirmModal"
+  />
 </template>
 
 <script setup>
@@ -174,6 +180,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { questionnaireAPI } from '../services/api.js'
 import Icon from '../components/Icon.vue'
+import ConfirmModal from '../components/ConfirmModal.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -188,6 +195,16 @@ const searchQuery = ref('')
 
 const successMessage = ref('')
 const errorMessage = ref('')
+
+const confirmModal = reactive({
+  show: false,
+  title: '',
+  message: '',
+  confirmText: 'Confirm',
+  type: 'danger',
+  loading: false,
+  onConfirm: () => {}
+})
 
 
 const questionnaireId = route.params.id
@@ -268,27 +285,41 @@ const publishQuestionnaire = async () => {
 }
 
 const exportResponses = () => {
-  alert('Export functionality coming soon!')
+  console.log('Export functionality coming soon!')
 }
 
 const viewResponse = (response) => {
-  alert(`Viewing response from ${response.respondent_name} - functionality coming soon!`)
+  console.log(`Viewing response from ${response.respondent_name} - functionality coming soon!`)
 }
 
-const deleteResponse = async (responseId) => {
-  if (confirm('Are you sure you want to delete this response? This action cannot be undone.')) {
-    try {
+const deleteResponse = (responseId) => {
+  confirmModal.show = true
+  confirmModal.title = 'Delete Response'
+  confirmModal.message = 'Are you sure you want to delete this response? This action cannot be undone.'
+  confirmModal.confirmText = 'Delete'
+  confirmModal.type = 'danger'
+  confirmModal.onConfirm = () => executeDeleteResponse(responseId)
+}
+
+const executeDeleteResponse = async (responseId) => {
+  try {
+    confirmModal.loading = true
       
-      responses.value = responses.value.filter(r => r.id !== responseId)
-      showSuccess('Response deleted successfully!')
-    } catch (error) {
-      console.error('Error deleting response:', error)
-      showError('Failed to delete response')
-    }
+    responses.value = responses.value.filter(r => r.id !== responseId)
+    showSuccess('Response deleted successfully!')
+    closeConfirmModal()
+  } catch (error) {
+    console.error('Error deleting response:', error)
+    showError('Failed to delete response')
+  } finally {
+    confirmModal.loading = false
   }
 }
 
-
+const closeConfirmModal = () => {
+  confirmModal.show = false
+  confirmModal.loading = false
+}
 const formatDate = (date) => {
   if (!date) return 'No date'
   return new Intl.DateTimeFormat('en-US', {
