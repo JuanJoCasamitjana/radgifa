@@ -260,7 +260,26 @@ func (s *Server) createQuestionnaireMember(c echo.Context) error {
 					zap.Error(err))
 				return c.JSON(500, map[string]string{"error": "could not create member"})
 			}
+
+			// Generate JWT for authenticated member
+			claims := &JWTClaims{
+				EntityId:   member.ID.String(),
+				EntityType: "member",
+				RegisteredClaims: jwt.RegisteredClaims{
+					ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+					IssuedAt:  jwt.NewNumericDate(time.Now()),
+				},
+			}
+			jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+			t, err := jwtToken.SignedString(jwtSecret)
+			if err != nil {
+				return c.JSON(500, map[string]string{"error": "could not generate token"})
+			}
+
 			return c.JSON(201, map[string]interface{}{
+				"token":     t,
+				"type":      "member",
 				"member_id": member.ID,
 			})
 		} else {
@@ -273,7 +292,26 @@ func (s *Server) createQuestionnaireMember(c echo.Context) error {
 					zap.Error(err))
 				return c.JSON(500, map[string]string{"error": "could not create anonymous member"})
 			}
+
+			// Generate JWT for anonymous member
+			claims := &JWTClaims{
+				EntityId:   member.ID.String(),
+				EntityType: "member",
+				RegisteredClaims: jwt.RegisteredClaims{
+					ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+					IssuedAt:  jwt.NewNumericDate(time.Now()),
+				},
+			}
+			jwtToken := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+			t, err := jwtToken.SignedString(jwtSecret)
+			if err != nil {
+				return c.JSON(500, map[string]string{"error": "could not generate token"})
+			}
+
 			return c.JSON(201, map[string]interface{}{
+				"token":             t,
+				"type":              "member",
 				"member_id":         member.ID,
 				"unique_identifier": member.UniqueIdentifier,
 				"passcode":          passcode,

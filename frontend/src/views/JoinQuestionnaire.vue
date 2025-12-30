@@ -117,6 +117,38 @@
         </button>
       </form>
     </div>
+
+    <div v-if="showPasscodeModal" class="modal-overlay" @click="closeModalAndRedirect">
+      <div class="passcode-modal" @click.stop>
+        <div class="modal-header">
+          <div class="icon-container success">
+            <Icon name="check" />
+          </div>
+          <h3>¡Te has unido exitosamente!</h3>
+        </div>
+        
+        <div class="modal-body">
+          <p>Guarda este código de acceso para volver a entrar:</p>
+          <div class="passcode-display">
+            <code>{{ savedPasscode }}</code>
+            <button @click="copyPasscode" class="copy-btn" :class="{ 'copied': passcodeCopied }">
+              <Icon :name="passcodeCopied ? 'check' : 'copy'" />
+              {{ passcodeCopied ? 'Copiado' : 'Copiar' }}
+            </button>
+          </div>
+          <p class="warning-text">
+            <Icon name="alert-triangle" />
+            Importante: Lo necesitarás para acceder nuevamente a tus respuestas.
+          </p>
+        </div>
+        
+        <div class="modal-footer">
+          <button @click="closeModalAndRedirect" class="confirm-btn">
+            Continuar al cuestionario
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -136,6 +168,9 @@ const tokenError = ref(null)
 const error = ref(null)
 const questionnaireTitle = ref('')
 const joinAction = ref('register')
+const showPasscodeModal = ref(false)
+const savedPasscode = ref('')
+const passcodeCopied = ref(false)
 
 const formData = reactive({
   unique_identifier: '',
@@ -186,24 +221,18 @@ const handleSubmit = async () => {
 
     const response = await participationAPI.joinQuestionnaire(token.value, memberData)
 
-    if (joinAction.value === 'register' && response.data.passcode) {
-      const passcode = response.data.passcode
-      const memberId = response.data.member_id
-
-      alert(`¡Te has unido exitosamente!\n\nGuarda este código de acceso:\n${passcode}\n\nLo necesitarás para acceder nuevamente a tus respuestas.`)
-
-      localStorage.setItem('member_token', response.data.token || null)
-      localStorage.setItem('member_id', memberId)
-      localStorage.setItem('member_type', 'anonymous')
-
-      router.push(`/answer/${token.value}`)
-    } else if (joinAction.value === 'login' && response.data.token) {
+    // Guardar token JWT en localStorage
+    if (response.data.token) {
       localStorage.setItem('member_token', response.data.token)
       localStorage.setItem('member_id', response.data.member_id)
-      localStorage.setItem('member_type', 'returning')
+      localStorage.setItem('member_type', joinAction.value === 'login' ? 'returning' : 'anonymous')
+    }
 
-      router.push(`/answer/${token.value}`)
-    } else if (joinAction.value === 'register') {
+    if (joinAction.value === 'register' && response.data.passcode) {
+      savedPasscode.value = response.data.passcode
+      showPasscodeModal.value = true
+      submitting.value = false
+    } else {
       router.push(`/answer/${token.value}`)
     }
 
@@ -268,6 +297,23 @@ const tryAutoJoin = async () => {
   } catch (err) {
     loading.value = false
   }
+}
+
+const copyPasscode = async () => {
+  try {
+    await navigator.clipboard.writeText(savedPasscode.value)
+    passcodeCopied.value = true
+    setTimeout(() => {
+      passcodeCopied.value = false
+    }, 2000)
+  } catch (err) {
+    console.error('Error copying to clipboard:', err)
+  }
+}
+
+const closeModalAndRedirect = () => {
+  showPasscodeModal.value = false
+  router.push(`/answer/${token.value}`)
 }
 
 onMounted(() => {
@@ -518,6 +564,173 @@ onMounted(() => {
   transform: none;
 }
 
+/* Modal styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.passcode-modal {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  padding: 2rem;
+  width: 90%;
+  max-width: 500px;
+  animation: slideUp 0.3s ease-out;
+}
+
+.passcode-modal .modal-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.passcode-modal .icon-container {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1rem;
+}
+
+.passcode-modal .icon-container.success {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.passcode-modal .icon-container :deep(svg) {
+  width: 32px;
+  height: 32px;
+}
+
+.passcode-modal .modal-header h3 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+}
+
+.passcode-modal .modal-body {
+  margin-bottom: 1.5rem;
+}
+
+.passcode-modal .modal-body > p {
+  color: #6b7280;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.passcode-display {
+  background: #f9fafb;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.passcode-display code {
+  font-family: 'Courier New', monospace;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #4f46e5;
+  letter-spacing: 0.1em;
+}
+
+.copy-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #4f46e5;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.copy-btn:hover {
+  background: #4338ca;
+}
+
+.copy-btn.copied {
+  background: #16a34a;
+}
+
+.copy-btn :deep(svg) {
+  width: 16px;
+  height: 16px;
+}
+
+.warning-text {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #fef3c7;
+  border: 1px solid #fbbf24;
+  border-radius: 6px;
+  padding: 0.75rem;
+  color: #92400e;
+  font-size: 0.875rem;
+}
+
+.warning-text :deep(svg) {
+  width: 18px;
+  height: 18px;
+  color: #f59e0b;
+  flex-shrink: 0;
+}
+
+.passcode-modal .modal-footer {
+  display: flex;
+  justify-content: center;
+}
+
+.confirm-btn {
+  background: #4f46e5;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.875rem 2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.confirm-btn:hover {
+  background: #4338ca;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+}
+
 @media (max-width: 640px) {
   .auth-card {
     padding: 1.5rem;
@@ -525,6 +738,21 @@ onMounted(() => {
 
   .join-header h1 {
     font-size: 1.5rem;
+  }
+
+  .passcode-modal {
+    padding: 1.5rem;
+    width: 95%;
+  }
+
+  .passcode-display {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .copy-btn {
+    width: 100%;
+    justify-content: center;
   }
 }
 </style>

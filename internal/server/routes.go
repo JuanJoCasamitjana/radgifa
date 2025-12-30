@@ -104,7 +104,9 @@ func (s *Server) RegisterRoutes() http.Handler {
 	}))
 	authRateLimiter := middleware.RateLimiter(middleware.NewRateLimiterMemoryStore(reqs_sec))
 
+	e.GET("/register", s.serveFrontend)
 	e.POST("/register", s.RegisterHandler, authRateLimiter)
+	e.GET("/login", s.serveFrontend)
 	e.POST("/login", s.loginHandler, authRateLimiter)
 
 	e.POST("/check/username", s.checkUsernameAvailability)
